@@ -86,7 +86,7 @@ class AppService {
 
     try {
       await this.doSomething(start, ended)
-      await this.counterIndexer.next()
+      await this.counterIndexer.next(ended)
     }
     catch (e) {
       // Task failed, do not move the index pointer
