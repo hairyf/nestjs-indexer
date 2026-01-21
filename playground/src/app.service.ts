@@ -1,8 +1,9 @@
 /* eslint-disable no-console */
 import type { Indexer } from 'nestjs-indexer'
-import { delay } from '@hairy/utils'
+import { delay, noop } from '@hairy/utils'
 import { Injectable } from '@nestjs/common'
 import { Interval } from '@nestjs/schedule'
+import dayjs from 'dayjs'
 import { InjectIndexer } from 'nestjs-indexer'
 import { Redlock } from 'nestjs-redlock-universal'
 
@@ -20,7 +21,8 @@ export class AppService {
   }
 
   @Interval(1000)
-  @Redlock({ key: 'indexer:counter' })
+  @Redlock({ key: 'indexer:counter', ttl: 500 })
+  // 通过 redlock 保证每次只执行一个实例
   async handleCounter() {
     // 1. check if the indexer is latest
     if (await this.counterIndexer.latest())
@@ -44,18 +46,16 @@ export class AppService {
   }
 
   @Interval(100)
+  // 多个实例并发执行
   async handleTimer() {
-    async function callback(start: number, ended: number) {
+    async function callback(start: number) {
       await delay(1000)
-      if (Math.random() < 0.5)
+      if (Math.random() < 0.1)
         throw new Error('Random failure')
-      console.log('Indexer "timer" do something the next from', start, 'to', ended, 'success')
+      console.log('Indexer "timer" do something from', dayjs(start).format('YYYY-MM-DD HH:mm:ss'))
     }
-    try {
-      await this.counterIndexer.consume(callback)
-    }
-    catch {
-      // silent error
-    }
+
+    // silent error
+    await this.timerIndexer.consume(callback).catch(noop)
   }
 }

@@ -5,9 +5,9 @@ import { redis } from '../services'
 
 export const timer = createIndexer<number>({
   name: 'timer',
-  concurrency: 2,
+  concurrency: 1000,
+  redis: new IoredisAdapter(redis),
   step: current => dayjs(current).add(10, 'minute').valueOf(),
   lastend: current => dayjs(current).isSame(dayjs(), 'minute') || dayjs(current).isAfter(dayjs(), 'minute'),
   initial: () => dayjs().startOf('day').valueOf(),
-  redis: new IoredisAdapter(redis),
 })

@@ -10,10 +10,12 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
   private readonly storage: Storage
   private readonly initialValue: T | (() => T | Promise<T>)
   private readonly lastend?: (current: T) => boolean
+  private readonly runningTimeout?: number
+  private readonly retryTimeout?: number
+  private readonly concurrencyTimeout?: number
   readonly #step?: StepFunction<T>
   private readonly redisAdapter?: RedisAdapter
   private readonly currentLock?: ReturnType<typeof createLock>
-  private readonly blockTasks: T[] = []
 
   constructor(options: IndexerOptions<T>) {
     this.name = options.name
@@ -22,6 +24,9 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     this.storage = options.storage!
     this.initialValue = options.initial
     this.lastend = options.lastend
+    this.runningTimeout = options.runningTimeout ?? 60
+    this.retryTimeout = options.retryTimeout ?? 60
+    this.concurrencyTimeout = options.concurrencyTimeout ?? (this.runningTimeout * 2)
     this.#step = options.step
     this.redisAdapter = options.redis
 
@@ -39,6 +44,9 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     return (this.redisAdapter as any)?.getClient()
   }
 
+  /**
+   * 计算下一个索引值
+   */
   async step(current?: T): Promise<T> {
     if (!this.#step)
       throw new Error(`Indexer "${this.name}" requires a step function`)
@@ -102,6 +110,8 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
 
     await this.currentLock.using(async () => {
       start = await this.current()
+      if (this.lastend && this.lastend(start))
+        throw new Error(`Indexer "${this.name}" reached latest: ${start}`)
       // 支持同步和异步 step 函数
       ended = await this.step(start)
       // 立即预占，这样下一个实例就能获取到下一个不同的 start 值，实现真正的并发
@@ -112,6 +122,62 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
       throw new Error('Failed to get start and ended')
 
     return [start, ended]
+  }
+
+  /**
+   * 登记占用一个并发名额
+   */
+  private async occupy(start: T): Promise<void> {
+    if (!this.redis)
+      return
+    const key = `indexer:${this.name}:concurrency`
+    await this.redis
+      .pipeline()
+      .rpush(key, JSON.stringify(start))
+      // 影子 Key 的过期时间代表任务的“最长处理时间”
+      .set(`${key}:shadow`, '1', 'EX', String(this.runningTimeout))
+      .expire(key, String(this.concurrencyTimeout))
+      .exec()
+  }
+
+  /**
+   * 释放并发名额
+   */
+  private async release(start: T): Promise<void> {
+    if (!this.redis)
+      return
+    const key = `indexer:${this.name}:concurrency`
+    await this.redis
+      .pipeline()
+      .lrem(key, 1, JSON.stringify(start))
+      .del(`${key}:shadow`)
+      .exec()
+  }
+
+  /**
+   * 清理僵尸任务：检查正在执行的队列，如果任务已超时（影子 Key 消失），则移入失败队列重试
+   */
+  async cleanup(): Promise<void> {
+    if (!this.redis)
+      return
+    const concurrencyKey = `indexer:${this.name}:concurrency`
+
+    // 获取当前所有正在运行的任务
+    const runningTasks = await this.redis.lrange(concurrencyKey, 0, -1)
+
+    for (const start of runningTasks) {
+      const exists = await this.redis.exists(`${concurrencyKey}:shadow`)
+      if (exists)
+        continue
+      console.warn(`Indexer "${this.name}" found zombie task: ${start}. Moving to failed queue.`)
+      const startStr = JSON.stringify(start)
+      await this.redis.pipeline()
+        // 从运行队列移除
+        .lrem(concurrencyKey, 1, startStr)
+        // 塞入失败队列，等待下一次 consume 重新认领
+        .rpush(`indexer:${this.name}:failed`, startStr)
+        .exec()
+    }
   }
 
   /**
@@ -126,10 +192,13 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
         `indexer:${this.name}:failed`,
         JSON.stringify(start),
       )
-      .expire(`indexer:${this.name}:failed`, 60)
+      .expire(`indexer:${this.name}:failed`, String(this.retryTimeout))
       .exec()
   }
 
+  /**
+   * 获取失败任务
+   */
   async failed(): Promise<T | null> {
     if (!this.redis)
       return null
@@ -145,9 +214,18 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
    */
   async consume(
     callback: (start: T, ended: T) => Promise<void>,
+    options: { retry?: boolean } = {},
   ): Promise<void> {
+    const { retry = true } = options
     if (!this.redis || !this.currentLock || !this.#step)
       throw new Error('Indexer requires redis and step function to use "using" method')
+
+    // 1. 并发检查 (只有设置了 concurrency 时生效)
+    if (this.concurrency) {
+      const currentCount = await this.redis.llen(`indexer:${this.name}:concurrency`)
+      if (currentCount >= this.concurrency)
+        return
+    }
 
     const failed = await this.failed()
     let start: T
@@ -163,12 +241,40 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
       [start, ended] = await this.atomic()
     }
 
+    await this.occupy(start)
+
     try {
       await callback(start, ended)
     }
     catch (error) {
-      await this.fail(start)
+      if (retry)
+        await this.fail(start)
       throw error
     }
+    finally {
+      await this.release(start)
+    }
+  }
+
+  /**
+   * 重置当前 Indexer 的所有 Redis 状态
+   * 警告：这将清空并发计数、重试队列等，请确保没有其他实例正在运行
+   */
+  async reset(): Promise<void> {
+    if (!this.redis)
+      return
+
+    const keys = [
+      `indexer:${this.name}:current`, // 锁 Key
+      `indexer:${this.name}:concurrency`, // 并发队列
+      `indexer:${this.name}:failed`, // 失败重试队列
+    ]
+
+    // 也可以连同 storage 里的 current 值一起清空
+    await this.storage.removeItem(this.storageKey)
+
+    // 批量删除 Redis Key
+    await this.redis.del(...keys)
+    console.warn(`Indexer "${this.name}" state has been reset.`)
   }
 }
