@@ -6,17 +6,17 @@
 [![JSDocs][jsdocs-src]][jsdocs-href]
 [![License][license-src]][license-href]
 
-English | [中文](./README_ZH.md)
+[English](./README.md) | 中文
 
-A distributed cursor indexing and scheduling framework. Supports atomic stepping, concurrency control, and automatic failure retries.
+分布式游标索引调度框架。支持原子步进、并发控制与自动失败重试。
 
 ## Features
 
-* ⚡️ **Atomicity** - Ensures unique indexing intervals in distributed environments using Redis locks.
-* 🛡 **Concurrency Control** - Built-in semaphore mechanism to easily limit global task execution.
-* 🔄 **Self-healing** - Handles zombie task cleanup, failure retries, and concurrency management.
-* 📦 **Storage Abstraction** - Powered by [unstorage](https://www.google.com/search?q=https://github.com/unjs/unstorage), supporting Redis, FS, MongoDB, and more.
-* 🔗 **Queue Friendly** - Easily integrates with message queues like BullMQ and RabbitMQ.
+* ⚡️ **原子性** - 基于 Redis 锁确保索引区间在分布式环境下唯一派发。
+* 🛡 **并发控制** - 内置信号量机制，轻松限制全局任务执行数。
+* 🔄 **自愈能力** - 处理僵尸任务清理、失败任务重试与并发控制。
+* 📦 **存储抽象** - 基于 [unstorage](https://www.google.com/search?q=https://github.com/unjs/unstorage)，支持 Redis, FS, MongoDB 等多种存储。
+* 🔗 **队列友好** - 适配扩展 BullMQ, RabbitMQ 等消息队列。
 
 ## Install
 
@@ -28,7 +28,7 @@ npm i nestjs-indexer
 
 ### Single Instance Mode
 
-Suitable for scheduled tasks that require strict sequential execution on a single point.
+适用于对顺序要求严格、单点执行的定时任务。
 
 ```typescript
 // counter.indexer.ts
@@ -38,20 +38,20 @@ import { Indexer, IndexerFactory } from 'nestjs-indexer'
 @Injectable()
 @Indexer('counter', { initial: 0 })
 export class CounterIndexer extends IndexerFactory<number> {
-  // Stop execution when the task reaches the latest benchmark
-  // If not implemented, it defaults to never stopping
+  // 当任务达到最新指标时，停止执行
+  // 如果未实现，则默认不停止
   async onHandleLatest(current: number): Promise<boolean> {
     return current >= 1000
   }
 
-  // Required: Method to calculate the next index value
+  // 必须实现，用于计算下一个索引值的方法
   async onHandleStep(current: number): Promise<number> {
     return current + 1
   }
 }
 ```
 
-Import and register `IndexerModule`:
+引入并注册 IndexerModule
 
 ```typescript
 // app.module.ts
@@ -60,8 +60,8 @@ import { CounterIndexer } from './indexers/counter.indexer'
 
 IndexerModule.forRoot({
   indexers: [CounterIndexer],
-  // Configure persistent storage (for storing index pointers)
-  // If not provided, it defaults to memory storage (pointers lost on restart)
+  // 配置持久化存储（用于存储索引指针）
+  // 如果未使用，则默认使用内存存储（重启会丢失指针）
   // storage: createStorage(...)
 })
 ```
@@ -89,7 +89,7 @@ class AppService {
       await this.counterIndexer.next()
     }
     catch (e) {
-      // Task failed, do not move the index pointer
+      // 任务失败，不移动索引指针
     }
   }
 }
@@ -97,7 +97,7 @@ class AppService {
 
 ### Distributed Concurrency Mode
 
-Parallel execution across a multi-instance cluster. Handles atomic interval claiming and failed task retries automatically.
+多实例集群并发执行。内部自动处理原子区间认领及失败任务重试。
 
 ```typescript
 // timer.indexer.ts
@@ -108,9 +108,9 @@ import { IoredisAdapter } from 'nestjs-redlock-universal'
 @Injectable()
 @Indexer('timer', {
   initial: Date.now(),
-  concurrency: 50, // Global limit of 50 concurrent tasks
+  concurrency: 50, // 全局限制 50 个并发任务
   redis: new IoredisAdapter(redisClient),
-  runningTimeout: 60, // Max task duration: 60s (otherwise considered a zombie)
+  runningTimeout: 60, // 任务最长执行 60s，超时视为僵尸任务
 })
 export class TimerIndexer extends IndexerFactory<number> {
   async onHandleStep(current: number): Promise<number> {
@@ -118,13 +118,23 @@ export class TimerIndexer extends IndexerFactory<number> {
   }
 
   @Interval(1000 * 60 * 15)
-  // In distributed mode, zombie tasks need to be cleaned up periodically.
-  // By default, failures auto-retry. If retries time out, they occupy
-  // concurrency slots, eventually preventing further task execution.
+  // 如果是分布式模式，需要定期清理僵尸任务
+  // 默认情况下，fail 会自动重试，如果重试超时了，
+  // 就会占用并发信号量，时间长了，就会导致无法继续执行任务
   async onHandleCleanup(): Promise<void> {
     await this.cleanup()
   }
 }
+```
+
+```typescript
+// app.module.ts
+import { IndexerModule } from 'nestjs-indexer'
+import { TimerIndexer } from './indexers/timer.indexer'
+
+IndexerModule.forRoot({
+  indexers: [TimerIndexer],
+})
 ```
 
 ```typescript
@@ -138,7 +148,7 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    // Automatically fetches start/ended, handles retries and concurrency slots
+    // 自动获取 start/ended，处理失败重试与并发占用
     await this.timerIndexer.consume(async (start: number, ended: number) => {
       await this.processData(start, ended)
     })
@@ -148,7 +158,7 @@ class AppService {
 
 ### Integration with BullMQ
 
-Use the Indexer as an interval dispatcher combined with a queue for maximum reliability.
+将 Indexer 作为区间分发器，结合队列实现极致的可靠性。
 
 ```typescript
 import { Queue } from 'bull'
@@ -163,9 +173,9 @@ class AppService {
   @Interval(100)
   async handleTimer() {
     await this.timerIndexer.consume(
-      // Dispatch to queue; successful entry into queue is treated as successful consumption
+      // 派发至队列，成功入队即视为消费成功
       async (start: number, ended: number) => this.queue.add('pull', { start, ended }),
-      // Disable internal Indexer retries, delegate to the queue instead
+      // 关闭 Indexer 内部重试，交给队列处理
       { retry: false }
     )
   }
@@ -176,43 +186,43 @@ class IndexerProcessor {
   @Process('pull')
   async handlePull(job: Job) {
     const { start, ended } = job.data
-    // Business logic here
+    // 具体的业务逻辑
   }
 }
 ```
 
 ## Configuration
 
-### @Indexer Decorator Options
+### @Indexer 装饰器配置
 
-| Property | Type | Description |
+| 属性 | 类型 | 描述 |
 | --- | --- | --- |
-| `name` | `string` | Unique identifier for the Indexer (Required) |
-| `initial` | `any` | Initial value (Optional, can also be implemented via `initial()` method) |
-| `concurrency` | `number` | Max global concurrent tasks (Requires Redis) |
-| `redis` | `RedisAdapter` | Redis adapter (Required for concurrency mode) |
-| `storage` | `Storage` | Storage adapter (Optional, defaults to memory) |
-| `runningTimeout` | `number` | Max task TTL for zombie cleanup (Seconds, default: 60) |
-| `retryTimeout` | `number` | Retention time for failed tasks in the retry queue (Seconds, default: 60) |
-| `concurrencyTimeout` | `number` | TTL for concurrency keys (Seconds, default: `runningTimeout * 2`) |
+| `name` | `string` | Indexer 唯一标识（必需） |
+| `initial` | `any` | 初始值（可选，也可在类中实现 `initial()` 方法） |
+| `concurrency` | `number` | 全局最大并发任务数（需 Redis） |
+| `redis` | `RedisAdapter` | Redis 适配器（并发模式必需） |
+| `storage` | `Storage` | 存储适配器（可选，默认使用内存存储） |
+| `runningTimeout` | `number` | 任务最长存活时间，用于僵尸清理（秒，默认 60） |
+| `retryTimeout` | `number` | 失败任务在队列中的保留时间（秒，默认 60） |
+| `concurrencyTimeout` | `number` | 并发 Key 的自动过期时间（秒，默认 runningTimeout * 2） |
 
-### Class Methods
+### 类方法
 
-Classes extending `IndexerFactory<T>` should implement:
+继承 `IndexerFactory<T>` 的类需要实现以下方法：
 
-* `step(current: T): Promise<T>` - **Required**: Calculates the next index value.
-* `isLatest(current: T): Promise<boolean> | boolean` - **Optional**: Checks if the latest benchmark is reached.
-* `initial(): Promise<T>` - **Optional**: Gets the initial value (overrides decorator `initial`).
+* `step(current: T): Promise<T>` - **必需**，计算下一个索引值
+* `isLatest(current: T): Promise<boolean> | boolean` - **可选**，检查是否已到达最新指标
+* `initial(): Promise<T>` - **可选**，获取初始值（如果不提供，使用装饰器中的 `initial`）
 
 ## API Methods
 
-* `consume(callback, options?)` - Core function integrating concurrency and retry logic.
-* `atomic()` - Atomically retrieves the next index interval.
-* `current()` - Retrieves the current index value.
-* `next(value?)` - Sets the next index value manually.
-* `latest()` - Checks if the latest benchmark is reached.
-* `cleanup()` - Triggers zombie task cleanup (should be used with a cron/interval).
-* `reset()` - Resets all Redis states and cursor pointers (**Use with caution**: causes all tasks to re-execute).
+* `consume(callback, options?)` - 核心消费函数，集成并发与重试逻辑
+* `atomic()` - 原子获取下一个索引区间
+* `current()` - 获取当前索引值
+* `next(value?)` - 设置下一个索引值
+* `latest()` - 检查是否已到达最新指标
+* `cleanup()` - 触发僵尸任务清理（需要配合定时任务执行）
+* `reset()` - 重置所有 Redis 状态与游标指针(谨慎使用，会导致所有任务重新执行)
 
 ## License
 
