@@ -8,6 +8,7 @@ export default antfu(
     rules: {
       'ts/explicit-function-return-type': 'off',
       'ts/consistent-type-imports': 'off',
+      'pnpm/yaml-no-unused-catalog-item': 'off',
     },
   },
 )

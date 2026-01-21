@@ -3,16 +3,9 @@ catalogMode: prefer
 ignoreWorkspaceRootCheck: true
 
 shellEmulator: true
+
 trustPolicy: no-downgrade
 
-packages:
-  - playground
-  - docs
-  - packages/*
-  - examples/*
-
-patchedDependencies:
-  nestjs-redlock-universal: patches/nestjs-redlock-universal.patch
 catalogs:
   cli:
     '@antfu/eslint-config': ^6.6.1
@@ -42,6 +35,7 @@ catalogs:
     '@oxc-node/core': ^0.0.35
     ioredis: ^5.9.1
     nestjs-redlock-universal: ^0.3.0
+    redlock-universal: ^0.8.1
   testing:
     tinyexec: ^1.0.2
     vitest: ^4.0.15

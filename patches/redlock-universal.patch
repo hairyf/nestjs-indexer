@@ -1,0 +1,83 @@
+diff --git a/dist/index.js b/dist/index.js
+index 1c8d509a1a183d39b07ad9d5af4d6fb1b7c72c20..968958ccc18acf24c331bf3070c94788fd4f8677 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -900,11 +900,19 @@ var SimpleLock = class {
+    * @returns Result of the routine
+    */
+   async using(routine) {
+-    const handle = await this.acquire();
+-    if (this.logger) {
+-      return executeWithSingleLockExtension(this, handle, this.ttl, routine, this.logger);
+-    } else {
+-      return executeWithSingleLockExtension(this, handle, this.ttl, routine);
++    try {
++      const handle = await this.acquire();
++      if (this.logger) {
++        return executeWithSingleLockExtension(this, handle, this.ttl, routine, this.logger);
++      } else {
++        return executeWithSingleLockExtension(this, handle, this.ttl, routine);
++      }
++    } catch (error) {
++      if (error instanceof LockAcquisitionError && error.message?.includes('is already held')) {
++        // Lock is already held by another instance, silently return
++        return;
++      }
++      throw error;
+     }
+   }
+ };
+@@ -1006,8 +1014,16 @@ var LeanSimpleLock = class {
+    * @returns Result of the routine
+    */
+   async using(routine) {
+-    const handle = await this.acquire();
+-    return executeWithSingleLockExtension(this, handle, this.t, routine);
++    try {
++      const handle = await this.acquire();
++      return executeWithSingleLockExtension(this, handle, this.t, routine);
++    } catch (error) {
++      if (error instanceof LockAcquisitionError && error.message?.includes('is already held')) {
++        // Lock is already held by another instance, silently return
++        return;
++      }
++      throw error;
++    }
+   }
+ };
+ 
+@@ -1308,16 +1324,24 @@ var RedLock = class {
+    * Provides AbortSignal when extension fails
+    */
+   async using(routine) {
+-    const handle = await this.acquire();
+-    const baseConfig = {
+-      locks: [this],
+-      handles: [handle],
+-      ttl: this.config.ttl,
+-      routine
+-    };
+-    return executeWithAutoExtension(
+-      this.config.logger ? { ...baseConfig, logger: this.config.logger } : baseConfig
+-    );
++    try {
++      const handle = await this.acquire();
++      const baseConfig = {
++        locks: [this],
++        handles: [handle],
++        ttl: this.config.ttl,
++        routine
++      };
++      return executeWithAutoExtension(
++        this.config.logger ? { ...baseConfig, logger: this.config.logger } : baseConfig
++      );
++    } catch (error) {
++      if (error instanceof LockAcquisitionError && error.message?.includes('is already held')) {
++        // Lock is already held by another instance, silently return
++        return;
++      }
++      throw error;
++    }
+   }
+ };
+ 
