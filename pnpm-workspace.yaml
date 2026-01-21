@@ -24,6 +24,17 @@ catalogs:
     vite: ^7.2.7
   inlined:
     '@antfu/utils': ^9.3.0
+  runtime:
+    '@hairy/lnv': ^9.1.0
+    '@hairy/oxrun': ^0.2.8
+    '@hairy/utils': ^1.47.0
+    '@nestjs/common': ^11.0.11
+    '@nestjs/core': ^11.0.11
+    '@nestjs/platform-express': ^11.0.11
+    '@nestjs/swagger': ^11.0.6
+    '@oxc-node/core': ^0.0.35
+    ioredis: ^5.9.1
+    nestjs-redlock-universal: ^0.3.0
   testing:
     tinyexec: ^1.0.2
     vitest: ^4.0.15

@@ -1,0 +1,32 @@
+{
+  "name": "playground",
+  "type": "module",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "lnv -- oxrun watch src/main.ts",
+    "start": "lnv -- oxrun src/main.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "simple-git-hooks"
+  },
+  "dependencies": {
+    "@hairy/lnv": "catalog:runtime",
+    "@hairy/oxrun": "catalog:runtime",
+    "@hairy/utils": "catalog:runtime",
+    "@nestjs/common": "catalog:runtime",
+    "@nestjs/core": "catalog:runtime",
+    "@nestjs/platform-express": "catalog:runtime",
+    "@nestjs/swagger": "catalog:runtime",
+    "ioredis": "catalog:runtime",
+    "nestjs-redlock-universal": "catalog:runtime"
+  },
+  "devDependencies": {
+    "@oxc-node/core": "catalog:runtime",
+    "@types/node": "catalog:types",
+    "typescript": "catalog:cli"
+  }
+}
