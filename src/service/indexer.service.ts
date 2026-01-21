@@ -1,5 +1,5 @@
 import type { Storage } from 'unstorage'
-import type { IndexerOptions, IndexerValue } from './types'
+import type { IndexerOptions, IndexerValue } from '../interfaces'
 
 export class Indexer<T extends IndexerValue = IndexerValue> {
   public readonly name: string
@@ -7,6 +7,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
   private readonly storage: Storage
   private readonly initialValue: T | (() => T)
   private readonly lastend?: (current: T) => boolean
+  private readonly step?: (current: T) => T
 
   constructor(options: IndexerOptions<T>) {
     this.name = options.name
@@ -14,6 +15,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     this.storage = options.storage!
     this.initialValue = options.initial
     this.lastend = options.lastend
+    this.step = options.step
   }
 
   /**
@@ -33,9 +35,24 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
 
   /**
    * 设置下一个索引值
+   * @param value 可选，如果提供则使用该值，否则使用 step 函数自动计算
    */
-  async next(value: T): Promise<void> {
-    await this.storage.setItem(this.storageKey, value)
+  async next(value?: T): Promise<void> {
+    if (value !== undefined) {
+      await this.storage.setItem(this.storageKey, value)
+      return
+    }
+
+    // 如果没有提供值，尝试使用 step 函数
+    if (!this.step) {
+      throw new Error(
+        `Indexer "${this.name}" requires either a value parameter or a step function`,
+      )
+    }
+
+    const current = await this.current()
+    const nextValue = this.step(current)
+    await this.storage.setItem(this.storageKey, nextValue)
   }
 
   /**

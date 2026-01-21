@@ -1,10 +1,10 @@
 import type { DynamicModule, Provider } from '@nestjs/common'
 import type { Storage } from 'unstorage'
-import type { IndexerConfig } from './types'
+import type { IndexerConfig } from '../interfaces'
 import { Module } from '@nestjs/common'
 import { createStorage } from 'unstorage'
-import { Indexer } from './indexer.class'
-import { INDEXER_TOKEN_PREFIX } from './inject-indexer.decorator'
+import { INDEXER_TOKEN_PREFIX } from '../constants'
+import { Indexer } from '../service/indexer.service'
 
 export interface IndexerModuleOptions {
   storage?: Storage
@@ -26,6 +26,7 @@ export class IndexerModule {
         name: config.name,
         initial: config.initial,
         lastend: config.lastend,
+        step: config.step,
         storage: indexerStorage,
       })
 

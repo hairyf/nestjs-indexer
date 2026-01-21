@@ -1,0 +1,1 @@
+export const INDEXER_TOKEN_PREFIX = 'INDEXER_'

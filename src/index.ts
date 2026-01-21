@@ -1,10 +1,10 @@
-export { createIndexer } from './create-indexer'
-export { Indexer } from './indexer.class'
-export { IndexerModule } from './indexer.module'
-export { InjectIndexer } from './inject-indexer.decorator'
+export { InjectIndexer } from './decorators/inject-indexer.decorator'
 export type {
   IndexerConfig,
   IndexerOptions,
   IndexerValue,
   LastEndChecker,
-} from './types'
+} from './interfaces'
+export { IndexerModule } from './module/indexer.module'
+export { createIndexer } from './service/create-indexer'
+export { Indexer } from './service/indexer.service'

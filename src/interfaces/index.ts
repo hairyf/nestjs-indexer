@@ -8,6 +8,7 @@ export interface IndexerConfig<T extends IndexerValue = IndexerValue> {
   name: string
   initial?: T | (() => T)
   lastend?: LastEndChecker<T>
+  step?: (current: T) => T
   storage?: Storage
 }
 
@@ -15,5 +16,6 @@ export interface IndexerOptions<T extends IndexerValue = IndexerValue> {
   name: string
   initial: T | (() => T)
   lastend?: LastEndChecker<T>
+  step?: (current: T) => T
   storage?: Storage
 }
