@@ -30,7 +30,7 @@ npm i nestjs-indexer
 
 Suitable for scheduled tasks that require strict sequential execution on a single point.
 
-```typescript
+```ts
 // counter.indexer.ts
 import { Injectable } from '@nestjs/common'
 import { Indexer, IndexerFactory } from 'nestjs-indexer'
@@ -53,7 +53,7 @@ export class CounterIndexer extends IndexerFactory<number> {
 
 Import and register `IndexerModule`:
 
-```typescript
+```ts
 // app.module.ts
 import { IndexerModule } from 'nestjs-indexer'
 import { CounterIndexer } from './indexers/counter.indexer'
@@ -66,7 +66,7 @@ IndexerModule.forRoot({
 })
 ```
 
-```typescript
+```ts
 // app.service.ts
 import { CounterIndexer } from './indexers/counter.indexer'
 
@@ -99,7 +99,7 @@ class AppService {
 
 Parallel execution across a multi-instance cluster. Handles atomic interval claiming and failed task retries automatically.
 
-```typescript
+```ts
 // timer.indexer.ts
 import { Injectable } from '@nestjs/common'
 import { Indexer, IndexerFactory } from 'nestjs-indexer'
@@ -127,7 +127,7 @@ export class TimerIndexer extends IndexerFactory<number> {
 }
 ```
 
-```typescript
+```ts
 // app.service.ts
 import { TimerIndexer } from './indexers/timer.indexer'
 
@@ -150,7 +150,7 @@ class AppService {
 
 Use the Indexer as an interval dispatcher combined with a queue for maximum reliability.
 
-```typescript
+```ts
 import { Queue } from 'bull'
 import { TimerIndexer } from './indexers/timer.indexer'
 
