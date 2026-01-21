@@ -14,7 +14,10 @@ const imports = [
     nodes: [new IoredisAdapter(redis)],
     defaultTtl: 30000,
   }),
-  IndexerModule.forRoot({ storage, indexers }),
+  IndexerModule.forRoot({
+    indexers,
+    storage,
+  }),
   ScheduleModule.forRoot(),
 ]
 

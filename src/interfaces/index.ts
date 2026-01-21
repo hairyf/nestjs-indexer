@@ -1,5 +1,4 @@
 import type { Storage } from 'unstorage'
-import Redis from 'ioredis'
 import { RedisAdapter } from 'redlock-universal'
 
 export type IndexerValue = string | number
@@ -14,8 +13,8 @@ export interface IndexerConfig<T extends IndexerValue = IndexerValue> {
   lastend?: LastEndChecker<T>
   step?: StepFunction<T>
   concurrency?: number
-  store?: Storage
-  redis?: Redis
+  storage?: Storage
+  redis?: RedisAdapter
 }
 
 export interface IndexerOptions<T extends IndexerValue = IndexerValue> {
@@ -24,7 +23,7 @@ export interface IndexerOptions<T extends IndexerValue = IndexerValue> {
   lastend?: LastEndChecker<T>
   step?: StepFunction<T>
   concurrency?: number
-  store?: Storage
+  storage?: Storage
   redis?: RedisAdapter
 }
 

@@ -21,14 +21,13 @@ export class IndexerModule {
 
     // 为每个索引器创建 provider
     const providers: Provider[] = indexers.map((config) => {
-      const indexerStorage = config.storage || defaultStorage
       const indexer = new Indexer({
-        name: config.name,
+        storage: config.storage ?? defaultStorage,
         initial: config.initial,
         lastend: config.lastend,
-        step: config.step,
         concurrency: config.concurrency,
-        storage: indexerStorage,
+        step: config.step,
+        name: config.name,
         redis: config.redis,
       })
 
