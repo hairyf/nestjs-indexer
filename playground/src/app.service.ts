@@ -1,19 +1,17 @@
 /* eslint-disable no-console */
-import type { Indexer } from 'nestjs-indexer'
 import { delay, noop } from '@hairy/utils'
 import { Injectable } from '@nestjs/common'
 import { Interval } from '@nestjs/schedule'
 import dayjs from 'dayjs'
-import { InjectIndexer } from 'nestjs-indexer'
 import { Redlock } from 'nestjs-redlock-universal'
+import { CounterIndexer } from './indexers/counter.indexer'
+import { TimerIndexer } from './indexers/timer.indexer'
 
 @Injectable()
 export class AppService {
   constructor(
-    @InjectIndexer('counter')
-    private counterIndexer: Indexer<number>,
-    @InjectIndexer('timer')
-    private timerIndexer: Indexer<number>,
+    private counterIndexer: CounterIndexer,
+    private timerIndexer: TimerIndexer,
   ) {}
 
   getHello(): string {
@@ -22,7 +20,7 @@ export class AppService {
 
   @Interval(1000)
   @Redlock({ key: 'indexer:counter', ttl: 500 })
-  // 单例模式，通过 redlock 保证每次只执行一个实例
+  // Single instance mode, ensure only one instance is executed at a time
   async handleCounter() {
     // 1. check if the indexer is latest
     if (await this.counterIndexer.latest())
@@ -46,7 +44,7 @@ export class AppService {
   }
 
   @Interval(100)
-  // 分布式并发，通过 indexer.consume，他会自动处理并发、失败重试、原子指标移动
+  // Distributed concurrency, through indexer.consume, it will automatically handle concurrency, failure retry, and atomic index movement
   async handleTimer() {
     async function callback(start: number) {
       await delay(1000)

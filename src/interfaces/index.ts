@@ -1,21 +1,20 @@
 import type { Storage } from 'unstorage'
-import { RedisAdapter } from 'redlock-universal'
+import {
+  BaseAdapter,
+  createBunyanAdapter,
+  createPinoAdapter,
+  GlideAdapter,
+  IoredisAdapter,
+  MemoryAdapter,
+  NodeRedisAdapter,
+  RedisAdapter,
+} from 'redlock-universal'
 
-export type IndexerValue = string | number
-
-export type LastEndChecker<T extends IndexerValue> = (current: T) => boolean
-
-export type StepFunction<T extends IndexerValue> = (current: T) => T | Promise<T>
-
-export interface IndexerConfig<T extends IndexerValue = IndexerValue> {
-  name: string
-  initial?: T | (() => T)
-  lastend?: LastEndChecker<T>
-  step?: StepFunction<T>
-  concurrency?: number
-  storage?: Storage
+export interface IndexerOptions {
   redis?: RedisAdapter
-
+  concurrency?: number
+  initial?: any
+  storage?: Storage
   // 以下配置仅在设置了 concurrency 时生效
   /** 任务最长执行时间 (秒)，超过此时间会被视为僵尸任务 */
   runningTimeout?: number
@@ -25,17 +24,13 @@ export interface IndexerConfig<T extends IndexerValue = IndexerValue> {
   concurrencyTimeout?: number
 }
 
-export interface IndexerOptions<T extends IndexerValue = IndexerValue> {
-  name: string
-  initial: T | (() => T)
-  lastend?: LastEndChecker<T>
-  step?: StepFunction<T>
-  concurrency?: number
-  storage?: Storage
-  redis?: RedisAdapter
-  runningTimeout?: number
-  retryTimeout?: number
-  concurrencyTimeout?: number
+export type {
+  BaseAdapter,
+  createBunyanAdapter,
+  createPinoAdapter,
+  GlideAdapter,
+  IoredisAdapter,
+  MemoryAdapter,
+  NodeRedisAdapter,
+  RedisAdapter,
 }
-
-export type { RedisAdapter }

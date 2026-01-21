@@ -1,40 +1,45 @@
 import type { Storage } from 'unstorage'
-import type { IndexerOptions, IndexerValue, StepFunction } from '../interfaces'
+import type { IndexerOptions } from './interfaces'
 import Redis from 'ioredis'
 import { createLock, RedisAdapter } from 'redlock-universal'
+import { INDEXER_CONFIG_KEY, INDEXER_NAME_KEY } from './indexer.decorator'
 
-export class Indexer<T extends IndexerValue = IndexerValue> {
+export abstract class IndexerFactory<T> {
   public readonly name: string
   public readonly concurrency?: number
   private readonly storageKey: string
   private readonly storage: Storage
-  private readonly initialValue: T | (() => T | Promise<T>)
-  private readonly lastend?: (current: T) => boolean
   private readonly runningTimeout?: number
   private readonly retryTimeout?: number
   private readonly concurrencyTimeout?: number
-  readonly #step?: StepFunction<T>
   private readonly redisAdapter?: RedisAdapter
   private readonly currentLock?: ReturnType<typeof createLock>
+  private indicator: T | undefined
 
-  constructor(options: IndexerOptions<T>) {
-    this.name = options.name
-    this.concurrency = options.concurrency
-    this.storageKey = `indexer:${options.name}`
-    this.storage = options.storage!
-    this.initialValue = options.initial
-    this.lastend = options.lastend
-    this.runningTimeout = options.runningTimeout ?? 60
-    this.retryTimeout = options.retryTimeout ?? 60
-    this.concurrencyTimeout = options.concurrencyTimeout ?? (this.runningTimeout * 2)
-    this.#step = options.step
-    this.redisAdapter = options.redis
+  constructor() {
+    // 否则从装饰器元数据读取
+    const constructor = this.constructor as any
+    const name = Reflect.getMetadata(INDEXER_NAME_KEY, constructor)
+    const config: IndexerOptions = Reflect.getMetadata(INDEXER_CONFIG_KEY, constructor) || {}
+
+    if (!name)
+      throw new Error('IndexerFactory must be decorated with @Indexer(name, config) or provide options in constructor')
+
+    this.name = name
+    this.concurrency = config.concurrency
+    this.storageKey = `indexer:${name}`
+    this.storage = config.storage!
+    this.runningTimeout = config.runningTimeout ?? 60
+    this.retryTimeout = config.retryTimeout ?? 60
+    this.concurrencyTimeout = config.concurrencyTimeout ?? (this.runningTimeout ? this.runningTimeout * 2 : 120)
+    this.redisAdapter = config.redis
+    this.indicator = config.initial
 
     // 如果提供了 Redis，创建锁实例
     if (this.redisAdapter) {
       this.currentLock = createLock({
         adapter: this.redisAdapter,
-        key: `indexer:${options.name}:current`,
+        key: `indexer:${this.name}:current`,
         ttl: 1000,
       })
     }
@@ -46,11 +51,34 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
 
   /**
    * 计算下一个索引值
+   * 子类必须覆盖此方法
    */
   async step(current?: T): Promise<T> {
-    if (!this.#step)
-      throw new Error(`Indexer "${this.name}" requires a step function`)
-    return this.#step(current ?? await this.current())
+    return await this.onHandleStep(current ?? (await this.current()))
+  }
+
+  /**
+   * 计算下一个索引值
+   * 子类必须覆盖此方法
+   */
+  protected onHandleStep(_current: T): Promise<T> | T {
+    throw new Error(`Indexer "${this.name}" requires step() method to be implemented`)
+  }
+
+  /**
+   * 检查是否已到达最新指标（结束标记）
+   * 子类可以覆盖此方法
+   */
+  async onHandleLatest(_current: T): Promise<boolean> {
+    return false
+  }
+
+  /**
+   * 获取初始值
+   * 子类可以覆盖此方法
+   */
+  async onHandleInitial(): Promise<T> {
+    return this.indicator as T
   }
 
   /**
@@ -62,10 +90,17 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
       return value
 
     // 如果没有值，返回初始值
-    const initial = typeof this.initialValue === 'function'
-      ? await (this.initialValue as () => T | Promise<T>)()
-      : this.initialValue
-    return initial
+    return await this.initial()
+  }
+
+  /**
+   * 获取初始值（内部使用）
+   */
+  async initial(): Promise<T> {
+    const value = await this.storage.getItem<T>(this.storageKey)
+    if (value !== null && value !== undefined)
+      return value
+    return await this.onHandleInitial()
   }
 
   /**
@@ -79,7 +114,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     }
 
     // 如果没有提供值，尝试使用 step 函数
-    const nextValue = await this.step()
+    const nextValue = await this.step() as any
     await this.storage.setItem(this.storageKey, nextValue)
   }
 
@@ -87,14 +122,14 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
    * 检查是否已到达最新指标（结束标记）
    */
   async latest(): Promise<boolean> {
-    if (!this.lastend)
+    if (!this.onHandleLatest)
       return false
 
     const current = await this.current()
     if (current === null)
       return false
 
-    return this.lastend(current)
+    return this.onHandleLatest(current)
   }
 
   /**
@@ -102,15 +137,15 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
    * 内部使用 redis 锁确保原子性
    */
   async atomic(): Promise<[T, T]> {
-    if (!this.currentLock || !this.#step)
-      throw new Error('Failed to get current lock or step function')
+    if (!this.currentLock)
+      throw new Error('Failed to get current lock')
 
     let start: T | undefined
     let ended: T | undefined
 
     await this.currentLock.using(async () => {
       start = await this.current()
-      if (this.lastend && this.lastend(start))
+      if (await this.latest())
         throw new Error(`Indexer "${this.name}" reached latest: ${start}`)
       // 支持同步和异步 step 函数
       ended = await this.step(start)
@@ -217,8 +252,8 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     options: { retry?: boolean } = {},
   ): Promise<void> {
     const { retry = true } = options
-    if (!this.redis || !this.currentLock || !this.#step)
-      throw new Error('Indexer requires redis and step function to use "using" method')
+    if (!this.redis || !this.currentLock)
+      throw new Error('Indexer requires redis to use "consume" method')
 
     // 1. 并发检查 (只有设置了 concurrency 时生效)
     if (this.concurrency) {

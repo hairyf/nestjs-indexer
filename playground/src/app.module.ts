@@ -5,7 +5,8 @@ import { IndexerModule } from 'nestjs-indexer'
 import { IoredisAdapter, RedlockModule } from 'nestjs-redlock-universal'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
-import { indexers } from './indexers'
+import { CounterIndexer } from './indexers/counter.indexer'
+import { TimerIndexer } from './indexers/timer.indexer'
 import { redis } from './services'
 import { storage } from './storage'
 
@@ -15,7 +16,10 @@ const imports = [
     defaultTtl: 30000,
   }),
   IndexerModule.forRoot({
-    indexers,
+    indexers: [
+      CounterIndexer,
+      TimerIndexer,
+    ],
     storage,
   }),
   ScheduleModule.forRoot(),

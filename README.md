@@ -30,39 +30,57 @@ npm i nestjs-indexer
 适用于对顺序要求严格、单点执行的定时任务。
 
 ```typescript
-// app.module.ts
-IndexerModule.forRoot({
-  indexers: [
-    createIndexer<number>({
-      name: 'counter',
-      initial: 0,
-      step: current => current + 1,
-      lastend: current => current >= 1000,
-      // 配置你的持久化存储（用于存储索引指针）
-      // 如果未使用，则默认使用内存存储
-      // storage: createStorage(...)
-    }),
-  ]
-})
+// counter.indexer.ts
+import { Injectable } from '@nestjs/common'
+import { Indexer, IndexerFactory } from 'nestjs-indexer'
 
+@Injectable()
+@Indexer('counter', { initial: 0 })
+export class CounterIndexer extends IndexerFactory<number> {
+  async onHandleLatest(current: number): Promise<boolean> {
+    return current >= 1000
+  }
+
+  async onHandleStep(current: number): Promise<number> {
+    return current + 1
+  }
+}
+```
+
+```typescript
+// app.module.ts
+import { IndexerModule } from 'nestjs-indexer'
+import { CounterIndexer } from './indexers/counter.indexer'
+
+IndexerModule.forRoot({
+  indexers: [CounterIndexer],
+  // 可选：配置持久化存储（用于存储索引指针）
+  // 如果未使用，则默认使用内存存储
+  // storage: createStorage(...)
+})
+```
+
+```typescript
 // app.service.ts
+import { CounterIndexer } from './indexers/counter.indexer'
+
 class AppService {
   constructor(
-    @InjectIndexer('counter') private indexer: Indexer<number>,
+    private counterIndexer: CounterIndexer,
   ) {}
 
   @Cron('0 0 * * *')
   @Redlock({ key: 'indexer:counter', ttl: 1000 })
   async handleTask() {
-    if (await this.indexer.latest())
+    if (await this.counterIndexer.latest())
       return
 
-    const start = await this.indexer.current()
-    const ended = await this.indexer.step(start)
+    const start = await this.counterIndexer.current()
+    const ended = await this.counterIndexer.step(start)
 
     try {
       await this.doSomething(start, ended)
-      await this.indexer.next()
+      await this.counterIndexer.next()
     }
     catch (e) {
       // 任务失败，不移动索引指针
@@ -76,26 +94,48 @@ class AppService {
 多实例集群并发执行。内部自动处理原子区间认领及失败任务重试。
 
 ```typescript
-// app.module.ts
-createIndexer<number>({
-  name: 'timer',
+// timer.indexer.ts
+import { Injectable } from '@nestjs/common'
+import { Indexer, IndexerFactory } from 'nestjs-indexer'
+import { IoredisAdapter } from 'nestjs-redlock-universal'
+
+@Injectable()
+@Indexer('timer', {
   initial: Date.now(),
-  step: current => current + 60000,
   concurrency: 50, // 全局限制 50 个并发任务
   redis: new IoredisAdapter(redisClient),
-  lockTimeout: 60, // 任务最长执行 60s，超时视为僵尸任务
+  runningTimeout: 60, // 任务最长执行 60s，超时视为僵尸任务
 })
+export class TimerIndexer extends IndexerFactory<number> {
+  async onHandleStep(current: number): Promise<number> {
+    return current + 60000
+  }
+}
+```
 
+```typescript
+// app.module.ts
+import { IndexerModule } from 'nestjs-indexer'
+import { TimerIndexer } from './indexers/timer.indexer'
+
+IndexerModule.forRoot({
+  indexers: [TimerIndexer],
+})
+```
+
+```typescript
 // app.service.ts
+import { TimerIndexer } from './indexers/timer.indexer'
+
 class AppService {
   constructor(
-    @InjectIndexer('timer') private indexer: Indexer<number>,
+    private timerIndexer: TimerIndexer,
   ) {}
 
   @Interval(100)
   async handleTimer() {
     // 自动获取 start/ended，处理失败重试与并发占用
-    await this.indexer.consume(async (start: number, ended: number) => {
+    await this.timerIndexer.consume(async (start: number, ended: number) => {
       await this.processData(start, ended)
     })
   }
@@ -107,14 +147,16 @@ class AppService {
 将 Indexer 作为区间分发器，结合队列实现极致的可靠性。
 
 ```typescript
+import { TimerIndexer } from './indexers/timer.indexer'
+
 class AppService {
   constructor(
-    @InjectIndexer('timer') private indexer: Indexer<number>,
+    private timerIndexer: TimerIndexer,
   ) {}
 
   @Interval(100)
   async handleTimer() {
-    await this.indexer.consume(
+    await this.timerIndexer.consume(
       // 派发至队列，成功入队即视为消费成功
       async (start: number, ended: number) => this.queue.add('pull', { start, ended }),
       // 关闭 Indexer 内部重试，交给队列处理
@@ -135,21 +177,36 @@ class IndexerProcessor {
 
 ## Configuration
 
+### @Indexer 装饰器配置
+
 | 属性 | 类型 | 描述 |
 | --- | --- | --- |
-| `name` | `string` | Indexer 唯一标识 |
-| `initial` | `T | Function` | 初始值或初始化函数 |
-| `step` | `Function` | 索引步进逻辑，定义区间范围 |
-| `concurrency` | `number` | 全局最大并发任务数 (需 Redis) |
-| `lockTimeout` | `number` | 任务最长存活时间，用于僵尸清理 (秒) |
-| `retryTimeout` | `number` | 失败任务在队列中的保留时间 (秒) |
+| `name` | `string` | Indexer 唯一标识（必需） |
+| `initial` | `any` | 初始值（可选，也可在类中实现 `initial()` 方法） |
+| `concurrency` | `number` | 全局最大并发任务数（需 Redis） |
+| `redis` | `RedisAdapter` | Redis 适配器（并发模式必需） |
+| `storage` | `Storage` | 存储适配器（可选，默认使用内存存储） |
+| `runningTimeout` | `number` | 任务最长存活时间，用于僵尸清理（秒，默认 60） |
+| `retryTimeout` | `number` | 失败任务在队列中的保留时间（秒，默认 60） |
+| `concurrencyTimeout` | `number` | 并发 Key 的自动过期时间（秒，默认 runningTimeout * 2） |
 
-## Methods
+### 类方法
 
-* `consume(callback)` - 核心消费函数，集成并发与重试逻辑。
-* `atomic()` - 原子获取下一个索引区间。
-* `cleanup()` - 手动触发僵尸任务清理（建议配合定时任务）。
-* `reset()` - 重置所有 Redis 状态与游标指针。
+继承 `IndexerFactory<T>` 的类需要实现以下方法：
+
+* `step(current: T): Promise<T>` - **必需**，计算下一个索引值
+* `isLatest(current: T): Promise<boolean> | boolean` - **可选**，检查是否已到达最新指标
+* `initial(): Promise<T>` - **可选**，获取初始值（如果不提供，使用装饰器中的 `initial`）
+
+## API Methods
+
+* `consume(callback, options?)` - 核心消费函数，集成并发与重试逻辑
+* `atomic()` - 原子获取下一个索引区间
+* `current()` - 获取当前索引值
+* `next(value?)` - 设置下一个索引值
+* `latest()` - 检查是否已到达最新指标
+* `cleanup()` - 手动触发僵尸任务清理（建议配合定时任务）
+* `reset()` - 重置所有 Redis 状态与游标指针
 
 ## License
 
