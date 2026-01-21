@@ -210,9 +210,9 @@ class IndexerProcessor {
 
 继承 `IndexerFactory<T>` 的类需要实现以下方法：
 
-* `step(current: T): Promise<T>` - **必需**，计算下一个索引值
-* `isLatest(current: T): Promise<boolean> | boolean` - **可选**，检查是否已到达最新指标
-* `initial(): Promise<T>` - **可选**，获取初始值（如果不提供，使用装饰器中的 `initial`）
+* `onHandleStep(current: T): Promise<T>` - **必需**，计算下一个索引值
+* `onHandleLatest(current: T): Promise<boolean> | boolean` - **可选**，检查是否已到达最新指标
+* `onHandleInitial(): Promise<T>` - **可选**，获取初始值（如果不提供，使用装饰器中的 `initial`）
 
 ## API Methods
 

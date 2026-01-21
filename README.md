@@ -200,9 +200,9 @@ class IndexerProcessor {
 
 Classes extending `IndexerFactory<T>` should implement:
 
-* `step(current: T): Promise<T>` - **Required**: Calculates the next index value.
-* `isLatest(current: T): Promise<boolean> | boolean` - **Optional**: Checks if the latest benchmark is reached.
-* `initial(): Promise<T>` - **Optional**: Gets the initial value (overrides decorator `initial`).
+* `onHandleStep(current: T): Promise<T>` - **Required**: Calculates the next index value.
+* `onHandleLatest(current: T): Promise<boolean> | boolean` - **Optional**: Checks if the latest benchmark is reached.
+* `onHandleInitial(): Promise<T>` - **Optional**: Gets the initial value (overrides decorator `initial`).
 
 ## API Methods
 
