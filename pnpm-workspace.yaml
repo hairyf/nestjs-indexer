@@ -1,6 +1,9 @@
 catalogMode: prefer
+
 ignoreWorkspaceRootCheck: true
+
 shellEmulator: true
+
 trustPolicy: no-downgrade
 
 packages:
@@ -24,6 +27,7 @@ catalogs:
     vite: ^7.2.7
   inlined:
     '@antfu/utils': ^9.3.0
+    unstorage: ^1.17.4
   runtime:
     '@hairy/lnv': ^9.1.0
     '@hairy/oxrun': ^0.2.8

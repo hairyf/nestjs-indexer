@@ -35,10 +35,21 @@
     "typecheck": "tsc",
     "prepare": "simple-git-hooks"
   },
+  "peerDependencies": {
+    "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0",
+    "@nestjs/core": "^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0",
+    "redlock-universal": "^0.8.0",
+    "reflect-metadata": "^0.1.13 || ^0.2.0"
+  },
+  "dependencies": {
+    "unstorage": "catalog:inlined"
+  },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",
     "@antfu/ni": "catalog:cli",
     "@antfu/utils": "catalog:inlined",
+    "@nestjs/common": "catalog:runtime",
+    "@nestjs/core": "catalog:runtime",
     "@types/node": "catalog:types",
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
