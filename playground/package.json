@@ -27,7 +27,6 @@
     "nestjs-redlock-universal": "catalog:runtime"
   },
   "devDependencies": {
-    "@oxc-node/core": "catalog:runtime",
     "@types/node": "catalog:types",
     "typescript": "catalog:cli"
   }

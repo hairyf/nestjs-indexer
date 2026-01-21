@@ -127,6 +127,9 @@ importers:
       '@nestjs/core':
         specifier: catalog:runtime
         version: 11.1.12(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.12)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@oxc-node/core':
+        specifier: catalog:runtime
+        version: 0.0.35
       '@types/node':
         specifier: catalog:types
         version: 25.0.1
@@ -206,9 +209,6 @@ importers:
         specifier: catalog:runtime
         version: 0.3.0(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.12)(redlock-universal@0.8.1(ioredis@5.9.2))(reflect-metadata@0.2.2)
     devDependencies:
-      '@oxc-node/core':
-        specifier: catalog:runtime
-        version: 0.0.35
       '@types/node':
         specifier: catalog:types
         version: 25.0.1

@@ -50,14 +50,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     }
 
     // 如果没有提供值，尝试使用 step 函数
-    if (!this.step) {
-      throw new Error(
-        `Indexer "${this.name}" requires either a value parameter or a step function`,
-      )
-    }
-
-    const current = await this.current()
-    const nextValue = this.step(current)
+    const nextValue = await this.step()
     await this.storage.setItem(this.storageKey, nextValue)
   }
 
