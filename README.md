@@ -12,7 +12,7 @@
 
 * ⚡️ **原子性** - 基于 Redis 锁确保索引区间在分布式环境下唯一派发。
 * 🛡 **并发控制** - 内置信号量机制，轻松限制全局任务执行数。
-* 🔄 **自愈能力** - 自动处理僵尸任务清理与失败任务重试。
+* 🔄 **自愈能力** - 处理僵尸任务清理、失败任务重试与并发控制。
 * 📦 **存储抽象** - 基于 [unstorage](https://www.google.com/search?q=https://github.com/unjs/unstorage)，支持 Redis, FS, MongoDB 等多种存储。
 * 🔗 **队列友好** - 适配扩展 BullMQ, RabbitMQ 等消息队列。
 
@@ -37,15 +37,20 @@ import { Indexer, IndexerFactory } from 'nestjs-indexer'
 @Injectable()
 @Indexer('counter', { initial: 0 })
 export class CounterIndexer extends IndexerFactory<number> {
+  // 当任务达到最新指标时，停止执行
+  // 如果未实现，则默认不停止
   async onHandleLatest(current: number): Promise<boolean> {
     return current >= 1000
   }
 
+  // 必须实现，用于计算下一个索引值的方法
   async onHandleStep(current: number): Promise<number> {
     return current + 1
   }
 }
 ```
+
+引入并注册 IndexerModule
 
 ```typescript
 // app.module.ts
@@ -54,8 +59,8 @@ import { CounterIndexer } from './indexers/counter.indexer'
 
 IndexerModule.forRoot({
   indexers: [CounterIndexer],
-  // 可选：配置持久化存储（用于存储索引指针）
-  // 如果未使用，则默认使用内存存储
+  // 配置持久化存储（用于存储索引指针）
+  // 如果未使用，则默认使用内存存储（重启会丢失指针）
   // storage: createStorage(...)
 })
 ```
@@ -110,6 +115,14 @@ export class TimerIndexer extends IndexerFactory<number> {
   async onHandleStep(current: number): Promise<number> {
     return current + 60000
   }
+
+  @Interval(1000 * 60 * 15)
+  // 如果是分布式模式，需要定期清理僵尸任务
+  // 默认情况下，fail 会自动重试，如果重试超时了，
+  // 就会占用并发信号量，时间长了，就会导致无法继续执行任务
+  async onHandleCleanup(): Promise<void> {
+    await this.cleanup()
+  }
 }
 ```
 
@@ -147,11 +160,13 @@ class AppService {
 将 Indexer 作为区间分发器，结合队列实现极致的可靠性。
 
 ```typescript
+import { Queue } from 'bull'
 import { TimerIndexer } from './indexers/timer.indexer'
 
 class AppService {
   constructor(
     private timerIndexer: TimerIndexer,
+    private queue: Queue,
   ) {}
 
   @Interval(100)
@@ -205,8 +220,8 @@ class IndexerProcessor {
 * `current()` - 获取当前索引值
 * `next(value?)` - 设置下一个索引值
 * `latest()` - 检查是否已到达最新指标
-* `cleanup()` - 手动触发僵尸任务清理（建议配合定时任务）
-* `reset()` - 重置所有 Redis 状态与游标指针
+* `cleanup()` - 触发僵尸任务清理（需要配合定时任务执行）
+* `reset()` - 重置所有 Redis 状态与游标指针(谨慎使用，会导致所有任务重新执行)
 
 ## License
 

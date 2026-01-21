@@ -5,8 +5,8 @@ ignoreWorkspaceRootCheck: true
 shellEmulator: true
 
 trustPolicy: no-downgrade
-
 packages:
+  - nestjs-indexer
   - playground
 
 patchedDependencies:
@@ -43,6 +43,7 @@ catalogs:
     nestjs-redlock-universal: ^0.3.0
     redlock-universal: ^0.8.1
   testing:
+    ioredis-mock: ^8.13.1
     tinyexec: ^1.0.2
     vitest: ^4.0.15
     vitest-package-exports: ^0.1.1

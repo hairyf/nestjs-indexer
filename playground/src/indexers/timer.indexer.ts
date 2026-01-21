@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Interval } from '@nestjs/schedule'
 import dayjs from 'dayjs'
 import { Indexer, IndexerFactory } from 'nestjs-indexer'
 import { redis } from '../services'
@@ -20,5 +21,11 @@ export class TimerIndexer extends IndexerFactory<number> {
 
   async onHandleLatest(current: number): Promise<boolean> {
     return dayjs(current).isSame(dayjs(), 'minute') || dayjs(current).isAfter(dayjs(), 'minute')
+  }
+
+  @Interval(1000 * 60 * 15)
+  // cleanup zombie tasks
+  async onHandleCleanup(): Promise<void> {
+    await this.cleanup()
   }
 }

@@ -63,6 +63,7 @@
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
     "ioredis": "catalog:runtime",
+    "ioredis-mock": "catalog:testing",
     "lint-staged": "catalog:cli",
     "publint": "catalog:cli",
     "simple-git-hooks": "catalog:cli",

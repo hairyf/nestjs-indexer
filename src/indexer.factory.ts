@@ -17,10 +17,8 @@ export abstract class IndexerFactory<T> {
   private indicator: T | undefined
 
   constructor() {
-    // 否则从装饰器元数据读取
-    const constructor = this.constructor as any
-    const name = Reflect.getMetadata(INDEXER_NAME_KEY, constructor)
-    const config: IndexerOptions = Reflect.getMetadata(INDEXER_CONFIG_KEY, constructor) || {}
+    const name = Reflect.getMetadata(INDEXER_NAME_KEY, this.constructor)
+    const config: IndexerOptions = Reflect.getMetadata(INDEXER_CONFIG_KEY, this.constructor) || {}
 
     if (!name)
       throw new Error('IndexerFactory must be decorated with @Indexer(name, config) or provide options in constructor')
@@ -61,9 +59,7 @@ export abstract class IndexerFactory<T> {
    * 计算下一个索引值
    * 子类必须覆盖此方法
    */
-  protected onHandleStep(_current: T): Promise<T> | T {
-    throw new Error(`Indexer "${this.name}" requires step() method to be implemented`)
-  }
+  abstract onHandleStep(current: T): Promise<T> | T
 
   /**
    * 检查是否已到达最新指标（结束标记）
