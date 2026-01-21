@@ -27,6 +27,7 @@ export class IndexerModule {
         initial: config.initial,
         lastend: config.lastend,
         step: config.step,
+        concurrency: config.concurrency,
         storage: indexerStorage,
       })
 

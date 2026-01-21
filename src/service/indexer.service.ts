@@ -3,6 +3,7 @@ import type { IndexerOptions, IndexerValue } from '../interfaces'
 
 export class Indexer<T extends IndexerValue = IndexerValue> {
   public readonly name: string
+  public readonly concurrency?: number
   private readonly storageKey: string
   private readonly storage: Storage
   private readonly initialValue: T | (() => T)
@@ -11,6 +12,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
 
   constructor(options: IndexerOptions<T>) {
     this.name = options.name
+    this.concurrency = options.concurrency
     this.storageKey = `indexer:${options.name}`
     this.storage = options.storage!
     this.initialValue = options.initial
