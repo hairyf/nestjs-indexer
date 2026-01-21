@@ -7,7 +7,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
   private readonly storage: Storage
   private readonly initialValue: T | (() => T)
   private readonly lastend?: (current: T) => boolean
-  private readonly step?: (current: T) => T
+  readonly #step?: (current: T) => T
 
   constructor(options: IndexerOptions<T>) {
     this.name = options.name
@@ -15,7 +15,13 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     this.storage = options.storage!
     this.initialValue = options.initial
     this.lastend = options.lastend
-    this.step = options.step
+    this.#step = options.step
+  }
+
+  async step(current?: T) {
+    if (!this.#step)
+      throw new Error(`Indexer "${this.name}" requires a step function`)
+    return this.#step(current ?? await this.current())
   }
 
   /**

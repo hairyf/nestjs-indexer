@@ -20,8 +20,10 @@
     "@nestjs/common": "catalog:runtime",
     "@nestjs/core": "catalog:runtime",
     "@nestjs/platform-express": "catalog:runtime",
+    "@nestjs/schedule": "catalog:runtime",
     "@nestjs/swagger": "catalog:runtime",
     "ioredis": "catalog:runtime",
+    "nestjs-indexer": "workspace:*",
     "nestjs-redlock-universal": "catalog:runtime"
   },
   "devDependencies": {
