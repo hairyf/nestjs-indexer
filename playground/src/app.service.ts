@@ -3,7 +3,6 @@ import type { Indexer } from 'nestjs-indexer'
 import { delay } from '@hairy/utils'
 import { Injectable } from '@nestjs/common'
 import { Interval } from '@nestjs/schedule'
-import dayjs from 'dayjs'
 import { InjectIndexer } from 'nestjs-indexer'
 import { Redlock } from 'nestjs-redlock-universal'
 
@@ -20,7 +19,7 @@ export class AppService {
     return 'Hello World'
   }
 
-  // @Interval(1000)
+  @Interval(1000)
   @Redlock({ key: 'indexer:counter' })
   async handleCounter() {
     // 1. check if the indexer is latest
@@ -44,34 +43,19 @@ export class AppService {
     }
   }
 
-  @Interval(200)
+  @Interval(100)
   async handleTimer() {
-    // 1. 检查是否已到达最新指标
-    if (await this.timerIndexer.latest())
-      return
-
-    // 2. 检查是否已达到并发限制
-    if (await this.timerIndexer.locked())
-      return
-
-    // 3. 使用 indexer.using 自动处理所有逻辑
-    // - 优先处理失败任务
-    // - 原子性获取 start 和 ended
-    // - 并发控制
-    // - 锁管理
-    // - 成功/失败处理
-    await this.timerIndexer.using(async (start, ended) => {
-      const startFormatted = dayjs(start).format('HH:mm:ss')
-      const endedFormatted = dayjs(ended).format('HH:mm:ss')
-
-      // 随机失败（50%）
-      if (Math.random() < 0.5) {
-        throw new Error('Random failure')
-      }
-
+    async function callback(start: number, ended: number) {
       await delay(1000)
-
-      console.log('Indexer "timer" do something the next from', startFormatted, 'to', endedFormatted, 'success')
-    })
+      if (Math.random() < 0.5)
+        throw new Error('Random failure')
+      console.log('Indexer "timer" do something the next from', start, 'to', ended, 'success')
+    }
+    try {
+      await this.counterIndexer.consume(callback)
+    }
+    catch {
+      // silent error
+    }
   }
 }

@@ -68,22 +68,13 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    // 1. check if the indexer is latest
-    if (await this.indexer.latest())
-      return
-    // 2. check if the indexer is locked
-    if (await this.indexer.locked())
-      return
-
-    this.indexer.using(
+    this.indexer.consume(
       // 3. use atomic to get start and end
       // 内部会使用 redis(indexer:timer:current) 确保原子性
       // const [start, end] = await indexer.atomic()
       // 内部会使用 redis(indexer:timer:step:{start}) 确保原子性
       async (start, ended) => {
         // ...doSomething
-        // 该 promise 成功，自动删除失败任务
-        // 内部调用 indexer.success(start)
         // 该 promise 失败，自动记录失败任务，需要重试的 step 列表
         // 内部调用 indexer.fail(start)
       }
@@ -107,15 +98,7 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    // 1. check if the indexer is latest
-    if (await this.indexer.latest())
-      return
-    // 2. check if the indexer is locked
-    if (await this.indexer.locked())
-      return
-    // 3. add job to queue
-
-    this.indexer.using(this.addJob)
+    this.indexer.consume((start, ended) => this.addJob(start, ended))
   }
 }
 
@@ -126,10 +109,6 @@ class IndexerProcessor {
   @Process('pull')
   async handlePull(job: Job<{ start: number, ended: number }>) {
     const { start, ended } = job.data
-    // - 这里不使用 indexer 的队列管理（下面的方法）
-    //   - indexer.fail_tasks
-    //   - indexer.success(start) / indexer.fail(start)
-    // bull 本身支持错误重试和错误记录
   }
 }
 ```
