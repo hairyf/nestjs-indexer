@@ -67,6 +67,7 @@
     "ioredis-mock": "catalog:testing",
     "lint-staged": "catalog:cli",
     "publint": "catalog:cli",
+    "reflect-metadata": "catalog:inlined",
     "simple-git-hooks": "catalog:cli",
     "tinyexec": "catalog:testing",
     "tsdown": "catalog:cli",

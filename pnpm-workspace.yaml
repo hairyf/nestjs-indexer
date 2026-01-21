@@ -5,6 +5,7 @@ ignoreWorkspaceRootCheck: true
 shellEmulator: true
 
 trustPolicy: no-downgrade
+
 packages:
   - nestjs-indexer
   - playground
@@ -28,6 +29,7 @@ catalogs:
   inlined:
     '@antfu/utils': ^9.3.0
     dayjs: ^1.11.19
+    reflect-metadata: ^0.2.2
     unstorage: ^1.17.4
   runtime:
     '@hairy/lnv': ^9.1.0

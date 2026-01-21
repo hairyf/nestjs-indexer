@@ -46,6 +46,9 @@ catalogs:
     dayjs:
       specifier: ^1.11.19
       version: 1.11.19
+    reflect-metadata:
+      specifier: ^0.2.2
+      version: 0.2.2
     unstorage:
       specifier: ^1.17.4
       version: 1.17.4
@@ -125,9 +128,6 @@ importers:
       redlock-universal:
         specifier: catalog:runtime
         version: 0.8.1(patch_hash=64ab5ac2c241f1db1b76db070e01af3d56c53c1084a3d516befca6e00424dcb4)(ioredis@5.9.2)
-      reflect-metadata:
-        specifier: ^0.1.13 || ^0.2.0
-        version: 0.2.2
       unstorage:
         specifier: catalog:inlined
         version: 1.17.4(ioredis@5.9.2)
@@ -174,6 +174,9 @@ importers:
       publint:
         specifier: catalog:cli
         version: 0.3.16
+      reflect-metadata:
+        specifier: catalog:inlined
+        version: 0.2.2
       simple-git-hooks:
         specifier: catalog:cli
         version: 2.13.1
