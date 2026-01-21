@@ -31,22 +31,21 @@ class AppService {
   constructor(
     @InjectIndexer('indexer-1')
     private indexer1: Indexer<number>,
-    @InjectIndexer('indexer-2')
-    private indexer2: Indexer<string>,
   ) {}
 
   @Cron('0 0 * * *')
   async handleTask() {
     // 1. check if the indexer is latest
-    if (await this.indexer2.latest())
+    if (await this.indexer1.latest())
       return
 
     // 2. get the current index value
-    const date = await this.indexer2.current()
+    const start = await this.indexer1.current()
+    const ended = await this.indexer1.step(start)
 
     // 3. do something
     try {
-      await this.doSomething(date)
+      await this.doSomething(start, ended)
 
       // 4. step the indexer
       await this.indexer2.next() // or await this.indexer2.next(newDate)
@@ -54,6 +53,83 @@ class AppService {
     catch (e) {
       // if the task failed, do not step the indexer
     }
+  }
+}
+```
+
+支持并发：
+
+```typescript
+class AppService {
+  constructor(
+    @InjectIndexer('indexer')
+    private indexer: Indexer<number>,
+  ) {}
+
+  @Interval(100)
+  async handleTimer() {
+    // 1. check if the indexer is latest
+    if (await this.indexer.latest())
+      return
+    // 2. check if the indexer is locked
+    if (await this.indexer.locked())
+      return
+
+    this.indexer.using(
+      // 3. use atomic to get start and end
+      // 内部会使用 redis(indexer:timer:current) 确保原子性
+      // const [start, end] = await indexer.atomic()
+      // 内部会使用 redis(indexer:timer:step:{start}) 确保原子性
+      async (start, ended) => {
+        // ...doSomething
+        // 该 promise 成功，自动删除失败任务
+        // 内部调用 indexer.success(start)
+        // 该 promise 失败，自动记录失败任务，需要重试的 step 列表
+        // 内部调用 indexer.fail(start)
+      }
+    )
+  }
+}
+```
+
+并发任务使用队列：
+
+```typescript
+class AppService {
+  constructor(
+    @InjectIndexer('indexer') private indexer: Indexer<number>,
+    @InjectQueue('indexer') private queue: Queue,
+  ) {}
+
+  async addJob(start: number, ended: number) {
+    await this.queue.add('pull', { start, ended, })
+  }
+
+  @Interval(100)
+  async handleTimer() {
+    // 1. check if the indexer is latest
+    if (await this.indexer.latest())
+      return
+    // 2. check if the indexer is locked
+    if (await this.indexer.locked())
+      return
+    // 3. add job to queue
+
+    this.indexer.using(this.addJob)
+  }
+}
+
+@Processor('indexer')
+class IndexerProcessor {
+  constructor() {}
+
+  @Process('pull')
+  async handlePull(job: Job<{ start: number, ended: number }>) {
+    const { start, ended } = job.data
+    // - 这里不使用 indexer 的队列管理（下面的方法）
+    //   - indexer.fail_tasks
+    //   - indexer.success(start) / indexer.fail(start)
+    // bull 本身支持错误重试和错误记录
   }
 }
 ```

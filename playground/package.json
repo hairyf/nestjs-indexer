@@ -25,8 +25,7 @@
     "dayjs": "catalog:inlined",
     "ioredis": "catalog:runtime",
     "nestjs-indexer": "workspace:*",
-    "nestjs-redlock-universal": "catalog:runtime",
-    "redlock-universal": "catalog:runtime"
+    "nestjs-redlock-universal": "catalog:runtime"
   },
   "devDependencies": {
     "@types/node": "catalog:types",

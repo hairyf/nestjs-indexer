@@ -56,6 +56,12 @@ catalogs:
     '@oxc-node/core':
       specifier: ^0.0.35
       version: 0.0.35
+    ioredis:
+      specifier: ^5.9.1
+      version: 5.9.2
+    redlock-universal:
+      specifier: ^0.8.1
+      version: 0.8.1
   testing:
     tinyexec:
       specifier: ^1.0.2
@@ -74,13 +80,18 @@ catalogs:
       specifier: ^25.0.1
       version: 25.0.1
 
+patchedDependencies:
+  redlock-universal:
+    hash: 64ab5ac2c241f1db1b76db070e01af3d56c53c1084a3d516befca6e00424dcb4
+    path: patches/redlock-universal.patch
+
 importers:
 
   .:
     dependencies:
       redlock-universal:
-        specifier: ^0.8.0
-        version: 0.8.1(ioredis@5.9.2)
+        specifier: catalog:runtime
+        version: 0.8.1(patch_hash=64ab5ac2c241f1db1b76db070e01af3d56c53c1084a3d516befca6e00424dcb4)(ioredis@5.9.2)
       reflect-metadata:
         specifier: ^0.1.13 || ^0.2.0
         version: 0.2.2
@@ -115,6 +126,9 @@ importers:
       eslint:
         specifier: catalog:cli
         version: 9.39.2(jiti@2.6.1)
+      ioredis:
+        specifier: catalog:runtime
+        version: 5.9.2
       lint-staged:
         specifier: catalog:cli
         version: 16.2.7
@@ -3583,8 +3597,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@ioredis/commands@1.5.0':
-    optional: true
+  '@ioredis/commands@1.5.0': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -4335,8 +4348,7 @@ snapshots:
       slice-ansi: 7.1.0
       string-width: 8.1.0
 
-  cluster-key-slot@1.1.2:
-    optional: true
+  cluster-key-slot@1.1.2: {}
 
   color-convert@2.0.1:
     dependencies:
@@ -4414,8 +4426,7 @@ snapshots:
 
   defu@6.1.4: {}
 
-  denque@2.1.0:
-    optional: true
+  denque@2.1.0: {}
 
   depd@2.0.0:
     optional: true
@@ -5094,7 +5105,6 @@ snapshots:
       standard-as-callback: 2.1.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   ipaddr.js@1.9.1:
     optional: true
@@ -5191,11 +5201,9 @@ snapshots:
     dependencies:
       p-locate: 5.0.0
 
-  lodash.defaults@4.2.0:
-    optional: true
+  lodash.defaults@4.2.0: {}
 
-  lodash.isarguments@3.1.0:
-    optional: true
+  lodash.isarguments@3.1.0: {}
 
   lodash.merge@4.6.2: {}
 
@@ -5812,15 +5820,13 @@ snapshots:
 
   readdirp@5.0.0: {}
 
-  redis-errors@1.2.0:
-    optional: true
+  redis-errors@1.2.0: {}
 
   redis-parser@3.0.0:
     dependencies:
       redis-errors: 1.2.0
-    optional: true
 
-  redlock-universal@0.8.1(ioredis@5.9.2):
+  redlock-universal@0.8.1(patch_hash=64ab5ac2c241f1db1b76db070e01af3d56c53c1084a3d516befca6e00424dcb4)(ioredis@5.9.2):
     optionalDependencies:
       ioredis: 5.9.2
 
@@ -6051,8 +6057,7 @@ snapshots:
 
   stackback@0.0.2: {}
 
-  standard-as-callback@2.1.0:
-    optional: true
+  standard-as-callback@2.1.0: {}
 
   statuses@2.0.2:
     optional: true

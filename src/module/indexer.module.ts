@@ -29,6 +29,7 @@ export class IndexerModule {
         step: config.step,
         concurrency: config.concurrency,
         storage: indexerStorage,
+        redis: config.redis,
       })
 
       return {

@@ -6,6 +6,9 @@ shellEmulator: true
 
 trustPolicy: no-downgrade
 
+patchedDependencies:
+  redlock-universal: patches/redlock-universal.patch
+
 catalogs:
   cli:
     '@antfu/eslint-config': ^6.6.1
