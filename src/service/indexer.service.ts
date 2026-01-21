@@ -135,7 +135,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
       .pipeline()
       .rpush(key, JSON.stringify(start))
       // 影子 Key 的过期时间代表任务的“最长处理时间”
-      .set(`${key}:shadow`, '1', 'EX', String(this.runningTimeout))
+      .set(`${key}:shadow:${start}`, '1', 'EX', String(this.runningTimeout))
       .expire(key, String(this.concurrencyTimeout))
       .exec()
   }
@@ -150,7 +150,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     await this.redis
       .pipeline()
       .lrem(key, 1, JSON.stringify(start))
-      .del(`${key}:shadow`)
+      .del(`${key}:shadow:${start}`)
       .exec()
   }
 
@@ -166,7 +166,7 @@ export class Indexer<T extends IndexerValue = IndexerValue> {
     const runningTasks = await this.redis.lrange(concurrencyKey, 0, -1)
 
     for (const start of runningTasks) {
-      const exists = await this.redis.exists(`${concurrencyKey}:shadow`)
+      const exists = await this.redis.exists(`${concurrencyKey}:shadow:${start}`)
       if (exists)
         continue
       console.warn(`Indexer "${this.name}" found zombie task: ${start}. Moving to failed queue.`)

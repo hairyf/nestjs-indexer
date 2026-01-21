@@ -22,7 +22,7 @@ export class AppService {
 
   @Interval(1000)
   @Redlock({ key: 'indexer:counter', ttl: 500 })
-  // 通过 redlock 保证每次只执行一个实例
+  // 单例模式，通过 redlock 保证每次只执行一个实例
   async handleCounter() {
     // 1. check if the indexer is latest
     if (await this.counterIndexer.latest())
@@ -46,7 +46,7 @@ export class AppService {
   }
 
   @Interval(100)
-  // 多个实例并发执行
+  // 分布式并发，通过 indexer.consume，他会自动处理并发、失败重试、原子指标移动
   async handleTimer() {
     async function callback(start: number) {
       await delay(1000)

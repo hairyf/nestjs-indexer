@@ -6,6 +6,9 @@ shellEmulator: true
 
 trustPolicy: no-downgrade
 
+packages:
+  - playground
+
 patchedDependencies:
   redlock-universal: patches/redlock-universal.patch
 
