@@ -2,8 +2,9 @@
 import type { Indexer } from 'nestjs-indexer'
 import { delay } from '@hairy/utils'
 import { Injectable } from '@nestjs/common'
-import { Cron } from '@nestjs/schedule'
+import { Interval } from '@nestjs/schedule'
 import { InjectIndexer } from 'nestjs-indexer'
+import { Redlock } from 'nestjs-redlock-universal'
 
 @Injectable()
 export class AppService {
@@ -16,9 +17,10 @@ export class AppService {
     return 'Hello World'
   }
 
-  @Cron('0 0 * * *')
+  @Interval(1000)
+  @Redlock({ key: 'indexer:counter' })
   async handleCounter() {
-  // 1. check if the indexer is latest
+    // 1. check if the indexer is latest
     if (await this.counterIndexer.latest())
       return
 
@@ -28,8 +30,8 @@ export class AppService {
 
     // 3. do something
     try {
-      console.log('do something', start, ended)
-      await delay(1000)
+      console.log('Indexer "counter" do something from', start, 'to', ended)
+      await delay(500)
 
       // 4. step the indexer
       await this.counterIndexer.next() // or await this.indexer2.next(newDate)

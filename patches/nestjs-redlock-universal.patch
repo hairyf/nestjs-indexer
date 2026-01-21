@@ -1,0 +1,84 @@
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index f886e19ca26c5d217d4db18f8087a5c5e076dfe6..97bb6bb0d2c61dbaf1534004dd5d41ab8033729c 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -25,6 +25,11 @@ interface RedlockDecoratorOptions {
+      * @default DEFAULT_RETRY_DELAY_MS (200ms)
+      */
+     retryDelay?: number;
++    /**
++     * Debug mode
++     * @default false
++     */
++    debug?: boolean;
+ }
+ 
+ /**
+diff --git a/dist/index.js b/dist/index.js
+index 417f53b4606c8e254ac2566af7e5dfddeddf5c8a..10b1e7158b3afeebc934f44844816783f3d7eacd 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -12,7 +12,9 @@ var __decorateClass = (decorators, target, key, kind) => {
+ var __decorateParam = (index, decorator) => (target, key) => decorator(target, key, index);
+ 
+ // src/decorators/redlock.decorator.ts
+-import { Inject as Inject2 } from "@nestjs/common";
++import { Inject as Inject2, Logger } from "@nestjs/common";
++import { styleText } from "node:util";
++import process from "node:process";
+ 
+ // src/service/redlock.service.ts
+ import { Injectable, Inject } from "@nestjs/common";
+@@ -182,6 +184,11 @@ function Redlock(options) {
+     if (typeof originalMethod !== "function") {
+       throw new Error(ERROR_MESSAGES.DECORATOR_TARGET_INVALID);
+     }
++    const logger = new Logger("Redlock");
++    const debug = options.debug === true;
++    const instanceId = process.pid;
++    const instanceMsg = `[${instanceId}]`;
++    const keyMsg = `"${options.key}"`;
+     descriptor.value = async function(...args) {
+       const redlockService = this.redlockService;
+       if (!redlockService) {
+@@ -191,19 +198,37 @@ function Redlock(options) {
+       if (!key || typeof key !== "string") {
+         throw new Error(ERROR_MESSAGES.INVALID_LOCK_KEY);
+       }
++      if (debug) {
++        const attemptMsg = `${instanceMsg} ♻️  Attempting to acquire lock ${keyMsg}`;
++        logger.log(styleText("gray", attemptMsg));
++      }
+       try {
+         const lockOptions = {};
+         if (options.ttl !== void 0) lockOptions.ttl = options.ttl;
+         if (options.retryAttempts !== void 0) lockOptions.retryAttempts = options.retryAttempts;
+         if (options.retryDelay !== void 0) lockOptions.retryDelay = options.retryDelay;
+-        return await redlockService.using(
++        const result = await redlockService.using(
+           key,
+-          async () => originalMethod.apply(this, args),
++          async () => {
++            if (debug) {
++              const successMsg = `${instanceMsg} 🔐 Lock ${keyMsg} acquired successfully`;
++              logger.log(styleText("gray", successMsg));
++            }
++            return originalMethod.apply(this, args)
++          },
+           lockOptions
+         );
++        return result;
+       } catch (error) {
++        if (error?.message?.includes('Failed to acquire lock') && error?.message.includes('is already held')) {
++          if (debug) {
++            const failedMsg = `${instanceMsg} ⚠️  Failed to acquire lock ${keyMsg}, another instance is holding it`;
++            logger.warn(styleText("gray", failedMsg));
++          }
++          return;
++        }
+         const enhancedError = new Error(
+-          `@Redlock decorator failed for key "${key}": ${error instanceof Error ? error.message : "Unknown error"}`,
++          `@Redlock decorator failed for key ${keyMsg}: ${error instanceof Error ? error.message : "Unknown error"}`,
+           { cause: error }
+         );
+         throw enhancedError;

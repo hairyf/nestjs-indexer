@@ -98,6 +98,11 @@ catalogs:
       specifier: ^25.0.1
       version: 25.0.1
 
+patchedDependencies:
+  nestjs-redlock-universal:
+    hash: da69b1233dc6acdeaa006274a5bf18364ec931f902a46ca13dd10512129aa8fb
+    path: patches/nestjs-redlock-universal.patch
+
 importers:
 
   .:
@@ -207,7 +212,7 @@ importers:
         version: link:..
       nestjs-redlock-universal:
         specifier: catalog:runtime
-        version: 0.3.0(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.12)(redlock-universal@0.8.1(ioredis@5.9.2))(reflect-metadata@0.2.2)
+        version: 0.3.0(patch_hash=da69b1233dc6acdeaa006274a5bf18364ec931f902a46ca13dd10512129aa8fb)(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.12)(redlock-universal@0.8.1(ioredis@5.9.2))(reflect-metadata@0.2.2)
     devDependencies:
       '@types/node':
         specifier: catalog:types
@@ -6856,7 +6861,7 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  nestjs-redlock-universal@0.3.0(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.12)(redlock-universal@0.8.1(ioredis@5.9.2))(reflect-metadata@0.2.2):
+  nestjs-redlock-universal@0.3.0(patch_hash=da69b1233dc6acdeaa006274a5bf18364ec931f902a46ca13dd10512129aa8fb)(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.12)(redlock-universal@0.8.1(ioredis@5.9.2))(reflect-metadata@0.2.2):
     dependencies:
       '@nestjs/common': 11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.1.12(@nestjs/common@11.1.12(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.12)(reflect-metadata@0.2.2)(rxjs@7.8.2)

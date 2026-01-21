@@ -3,7 +3,6 @@ catalogMode: prefer
 ignoreWorkspaceRootCheck: true
 
 shellEmulator: true
-
 trustPolicy: no-downgrade
 
 packages:
@@ -12,6 +11,8 @@ packages:
   - packages/*
   - examples/*
 
+patchedDependencies:
+  nestjs-redlock-universal: patches/nestjs-redlock-universal.patch
 catalogs:
   cli:
     '@antfu/eslint-config': ^6.6.1
