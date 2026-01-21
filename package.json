@@ -58,6 +58,7 @@
     "@antfu/utils": "catalog:inlined",
     "@nestjs/common": "catalog:runtime",
     "@nestjs/core": "catalog:runtime",
+    "@nestjs/testing": "catalog:runtime",
     "@oxc-node/core": "catalog:runtime",
     "@types/node": "catalog:types",
     "bumpp": "catalog:cli",

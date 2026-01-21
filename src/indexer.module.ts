@@ -28,7 +28,7 @@ export class IndexerModule {
     return {
       module: IndexerModule,
       providers,
-      exports: providers,
+      exports: indexers, // 导出 token（类），而不是 provider 对象
       global: true,
     }
   }

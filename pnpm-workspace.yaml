@@ -38,6 +38,7 @@ catalogs:
     '@nestjs/platform-express': ^11.0.11
     '@nestjs/schedule': ^6.1.0
     '@nestjs/swagger': ^11.0.6
+    '@nestjs/testing': ^11.0.11
     '@oxc-node/core': ^0.0.35
     ioredis: ^5.9.1
     nestjs-redlock-universal: ^0.3.0

@@ -1,7 +1,7 @@
 import type { Storage } from 'unstorage'
 import type { IndexerOptions } from './interfaces'
 import Redis from 'ioredis'
-import { createLock, RedisAdapter } from 'redlock-universal'
+import { createLock, Lock, RedisAdapter } from 'redlock-universal'
 import { INDEXER_CONFIG_KEY, INDEXER_NAME_KEY } from './indexer.decorator'
 
 export abstract class IndexerFactory<T> {
@@ -13,7 +13,7 @@ export abstract class IndexerFactory<T> {
   private readonly retryTimeout?: number
   private readonly concurrencyTimeout?: number
   private readonly redisAdapter?: RedisAdapter
-  private readonly currentLock?: ReturnType<typeof createLock>
+  private readonly currentLock?: Lock
   private indicator: T | undefined
 
   constructor() {
