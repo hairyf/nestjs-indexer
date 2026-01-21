@@ -28,6 +28,7 @@ catalogs:
     vite: ^7.2.7
   inlined:
     '@antfu/utils': ^9.3.0
+    dayjs: ^1.11.19
     unstorage: ^1.17.4
   runtime:
     '@hairy/lnv': ^9.1.0

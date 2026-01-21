@@ -22,6 +22,7 @@
     "@nestjs/platform-express": "catalog:runtime",
     "@nestjs/schedule": "catalog:runtime",
     "@nestjs/swagger": "catalog:runtime",
+    "dayjs": "catalog:inlined",
     "ioredis": "catalog:runtime",
     "nestjs-indexer": "workspace:*",
     "nestjs-redlock-universal": "catalog:runtime"

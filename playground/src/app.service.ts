@@ -11,6 +11,8 @@ export class AppService {
   constructor(
     @InjectIndexer('counter')
     private counterIndexer: Indexer<number>,
+    @InjectIndexer('timer')
+    private timerIndexer: Indexer<number>,
   ) {}
 
   getHello(): string {
