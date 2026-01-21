@@ -6,118 +6,154 @@
 [![JSDocs][jsdocs-src]][jsdocs-href]
 [![License][license-src]][license-href]
 
-```typescript
-import { createIndexer } from 'nestjs-indexer'
-import { createStorage } from 'unstorage'
+分布式游标索引调度框架。支持原子步进、并发控制与自动失败重试。
 
+## Features
+
+* ⚡️ **原子性** - 基于 Redis 锁确保索引区间在分布式环境下唯一派发。
+* 🛡 **并发控制** - 内置信号量机制，轻松限制全局任务执行数。
+* 🔄 **自愈能力** - 自动处理僵尸任务清理与失败任务重试。
+* 📦 **存储抽象** - 基于 [unstorage](https://www.google.com/search?q=https://github.com/unjs/unstorage)，支持 Redis, FS, MongoDB 等多种存储。
+* 🔗 **队列友好** - 适配扩展 BullMQ, RabbitMQ 等消息队列。
+
+## Install
+
+```bash
+npm i nestjs-indexer
+
+```
+
+## Usage
+
+### Single Instance Mode
+
+适用于对顺序要求严格、单点执行的定时任务。
+
+```typescript
+// app.module.ts
 IndexerModule.forRoot({
   indexers: [
     createIndexer<number>({
-      name: 'indexer-1',
-      initial: process.env.INDEXER_1_INITIAL,
+      name: 'counter',
+      initial: 0,
       step: current => current + 1,
-    }),
-    createIndexer<string>({
-      name: 'indexer-2',
-      initial: () => '2026-01-01',
-      lastend: current => dayjs(current).isSame(dayjs(), 'day'),
+      lastend: current => current >= 1000,
+      // 配置你的持久化存储（用于存储索引指针）
+      // 如果未使用，则默认使用内存存储
+      // storage: createStorage(...)
     }),
   ]
 })
-```
 
-```typescript
+// app.service.ts
 class AppService {
   constructor(
-    @InjectIndexer('indexer-1')
-    private indexer1: Indexer<number>,
+    @InjectIndexer('counter') private indexer: Indexer<number>,
   ) {}
 
   @Cron('0 0 * * *')
+  @Redlock({ key: 'indexer:counter', ttl: 1000 })
   async handleTask() {
-    // 1. check if the indexer is latest
-    if (await this.indexer1.latest())
+    if (await this.indexer.latest())
       return
 
-    // 2. get the current index value
-    const start = await this.indexer1.current()
-    const ended = await this.indexer1.step(start)
+    const start = await this.indexer.current()
+    const ended = await this.indexer.step(start)
 
-    // 3. do something
     try {
       await this.doSomething(start, ended)
-
-      // 4. step the indexer
-      await this.indexer2.next() // or await this.indexer2.next(newDate)
+      await this.indexer.next()
     }
     catch (e) {
-      // if the task failed, do not step the indexer
+      // 任务失败，不移动索引指针
     }
   }
 }
 ```
 
-支持并发：
+### Distributed Concurrency Mode
+
+多实例集群并发执行。内部自动处理原子区间认领及失败任务重试。
 
 ```typescript
+// app.module.ts
+createIndexer<number>({
+  name: 'timer',
+  initial: Date.now(),
+  step: current => current + 60000,
+  concurrency: 50, // 全局限制 50 个并发任务
+  redis: new IoredisAdapter(redisClient),
+  lockTimeout: 60, // 任务最长执行 60s，超时视为僵尸任务
+})
+
+// app.service.ts
 class AppService {
   constructor(
-    @InjectIndexer('indexer')
-    private indexer: Indexer<number>,
+    @InjectIndexer('timer') private indexer: Indexer<number>,
   ) {}
 
   @Interval(100)
   async handleTimer() {
-    this.indexer.consume(
-      // 3. use atomic to get start and end
-      // 内部会使用 redis(indexer:timer:current) 确保原子性
-      // const [start, end] = await indexer.atomic()
-      // 内部会使用 redis(indexer:timer:step:{start}) 确保原子性
-      async (start, ended) => {
-        // ...doSomething
-        // 该 promise 失败，自动记录失败任务，需要重试的 step 列表
-        // 内部调用 indexer.fail(start)
-      }
-    )
+    // 自动获取 start/ended，处理失败重试与并发占用
+    await this.indexer.consume(async (start: number, ended: number) => {
+      await this.processData(start, ended)
+    })
   }
 }
 ```
 
-并发任务使用队列：
+### Integration with BullMQ
+
+将 Indexer 作为区间分发器，结合队列实现极致的可靠性。
 
 ```typescript
 class AppService {
   constructor(
-    @InjectIndexer('indexer') private indexer: Indexer<number>,
-    @InjectQueue('indexer') private queue: Queue,
+    @InjectIndexer('timer') private indexer: Indexer<number>,
   ) {}
-
-  async addJob(start: number, ended: number) {
-    await this.queue.add('pull', { start, ended, })
-  }
 
   @Interval(100)
   async handleTimer() {
-    this.indexer.consume((start, ended) => this.addJob(start, ended))
+    await this.indexer.consume(
+      // 派发至队列，成功入队即视为消费成功
+      async (start: number, ended: number) => this.queue.add('pull', { start, ended }),
+      // 关闭 Indexer 内部重试，交给队列处理
+      { retry: false }
+    )
   }
 }
 
 @Processor('indexer')
 class IndexerProcessor {
-  constructor() {}
-
   @Process('pull')
-  async handlePull(job: Job<{ start: number, ended: number }>) {
+  async handlePull(job: Job) {
     const { start, ended } = job.data
+    // 具体的业务逻辑
   }
 }
 ```
 
+## Configuration
+
+| 属性 | 类型 | 描述 |
+| --- | --- | --- |
+| `name` | `string` | Indexer 唯一标识 |
+| `initial` | `T | Function` | 初始值或初始化函数 |
+| `step` | `Function` | 索引步进逻辑，定义区间范围 |
+| `concurrency` | `number` | 全局最大并发任务数 (需 Redis) |
+| `lockTimeout` | `number` | 任务最长存活时间，用于僵尸清理 (秒) |
+| `retryTimeout` | `number` | 失败任务在队列中的保留时间 (秒) |
+
+## Methods
+
+* `consume(callback)` - 核心消费函数，集成并发与重试逻辑。
+* `atomic()` - 原子获取下一个索引区间。
+* `cleanup()` - 手动触发僵尸任务清理（建议配合定时任务）。
+* `reset()` - 重置所有 Redis 状态与游标指针。
+
 ## License
 
-[MIT](./LICENSE) License © [Hairyf](https://github.com/hairyf)
-
-<!-- Badges -->
+[MIT](https://www.google.com/search?q=./LICENSE) License © [Hairyf](https://github.com/hairyf)
 
 [npm-version-src]: https://img.shields.io/npm/v/nestjs-indexer?style=flat&colorA=080f12&colorB=1fa669
 [npm-version-href]: https://npmjs.com/package/nestjs-indexer
