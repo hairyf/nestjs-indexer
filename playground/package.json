@@ -2,6 +2,7 @@
   "name": "playground",
   "type": "module",
   "version": "0.0.0",
+  "private": true,
   "license": "MIT",
   "scripts": {
     "dev": "lnv -- oxrun watch src/main.ts",

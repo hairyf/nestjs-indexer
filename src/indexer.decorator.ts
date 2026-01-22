@@ -1,7 +1,5 @@
 import { IndexerOptions } from '@/interfaces'
-
-export const INDEXER_NAME_KEY = Symbol('INDEXER_NAME')
-export const INDEXER_CONFIG_KEY = Symbol('INDEXER_CONFIG')
+import { INDEXER_CONFIG_KEY, INDEXER_NAME_KEY } from './constants'
 
 export function Indexer(name: string, options?: IndexerOptions): ClassDecorator {
   return (target: any) => {

@@ -1,14 +1,5 @@
 import type { Storage } from 'unstorage'
-import {
-  BaseAdapter,
-  createBunyanAdapter,
-  createPinoAdapter,
-  GlideAdapter,
-  IoredisAdapter,
-  MemoryAdapter,
-  NodeRedisAdapter,
-  RedisAdapter,
-} from 'redlock-universal'
+import { RedisAdapter } from 'redlock-universal'
 
 export interface IndexerOptions {
   redis?: RedisAdapter
@@ -22,15 +13,4 @@ export interface IndexerOptions {
   retryTimeout?: number
   /** 并发 Key 的自动过期时间 (秒)，应略大于 runningTimeout */
   concurrencyTimeout?: number
-}
-
-export type {
-  BaseAdapter,
-  createBunyanAdapter,
-  createPinoAdapter,
-  GlideAdapter,
-  IoredisAdapter,
-  MemoryAdapter,
-  NodeRedisAdapter,
-  RedisAdapter,
 }

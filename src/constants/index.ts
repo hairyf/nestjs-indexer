@@ -1,0 +1,3 @@
+export const INDEXER_TOKEN_PREFIX = 'INDEXER_'
+export const INDEXER_NAME_KEY = Symbol('INDEXER_NAME')
+export const INDEXER_CONFIG_KEY = Symbol('INDEXER_CONFIG')

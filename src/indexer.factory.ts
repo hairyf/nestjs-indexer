@@ -2,7 +2,7 @@ import type { Storage } from 'unstorage'
 import type { IndexerOptions } from './interfaces'
 import Redis from 'ioredis'
 import { createLock, Lock, RedisAdapter } from 'redlock-universal'
-import { INDEXER_CONFIG_KEY, INDEXER_NAME_KEY } from './indexer.decorator'
+import { INDEXER_CONFIG_KEY, INDEXER_NAME_KEY } from './constants'
 
 export abstract class IndexerFactory<T> {
   public readonly name: string

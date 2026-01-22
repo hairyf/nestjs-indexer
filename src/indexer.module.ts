@@ -2,7 +2,7 @@ import type { DynamicModule, Provider, Type } from '@nestjs/common'
 import type { Storage } from 'unstorage'
 import { Module } from '@nestjs/common'
 import { createStorage } from 'unstorage'
-import { INDEXER_CONFIG_KEY } from './indexer.decorator'
+import { INDEXER_CONFIG_KEY } from './constants'
 
 export interface IndexerModuleOptions {
   storage?: Storage
