@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { describe, expect, it } from 'vitest'
 import { Indexer, IndexerFactory, IndexerModule } from '../src/index'
@@ -16,25 +16,21 @@ class TestSingletonIndexer extends IndexerFactory<number> {
 // 测试服务 1：注入 Indexer
 @Injectable()
 class TestService1 {
-  constructor(
-    public readonly indexer: TestSingletonIndexer,
-  ) {}
+  constructor(@Inject(TestSingletonIndexer) public readonly indexer: TestSingletonIndexer) {}
 }
 
 // 测试服务 2：注入 Indexer
 @Injectable()
 class TestService2 {
-  constructor(
-    public readonly indexer: TestSingletonIndexer,
-  ) {}
+  constructor(@Inject(TestSingletonIndexer) public readonly indexer: TestSingletonIndexer) {}
 }
 
 // 测试服务 3：多次注入同一个 Indexer
 @Injectable()
 class TestService3 {
   constructor(
-    public readonly indexer1: TestSingletonIndexer,
-    public readonly indexer2: TestSingletonIndexer,
+    @Inject(TestSingletonIndexer) public readonly indexer1: TestSingletonIndexer,
+    @Inject(TestSingletonIndexer) public readonly indexer2: TestSingletonIndexer,
   ) {}
 }
 
