@@ -37,6 +37,7 @@
     "release": "bumpp",
     "start": "tsx src/index.ts",
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc",
     "prepare": "simple-git-hooks"
   },
@@ -60,7 +61,9 @@
     "@nestjs/core": "catalog:runtime",
     "@nestjs/testing": "catalog:runtime",
     "@oxc-node/core": "catalog:runtime",
+    "@types/ioredis-mock": "catalog:testing",
     "@types/node": "catalog:types",
+    "@vitest/coverage-v8": "catalog:testing",
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
     "ioredis": "catalog:runtime",
