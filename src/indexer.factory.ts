@@ -1,5 +1,6 @@
 import type { Storage } from 'unstorage'
 import type { IndexerOptions } from './interfaces'
+import { Logger } from '@nestjs/common'
 import Redis from 'ioredis'
 import { createLock, Lock, RedisAdapter } from 'redlock-universal'
 import { INDEXER_CONFIG_KEY, INDEXER_NAME_KEY } from './constants'
@@ -15,6 +16,7 @@ export abstract class IndexerFactory<T> {
   private readonly redisAdapter?: RedisAdapter
   private readonly currentLock?: Lock
   private indicator: T | undefined
+  private readonly logger: Logger
 
   constructor() {
     const name = Reflect.getMetadata(INDEXER_NAME_KEY, this.constructor)
@@ -32,6 +34,7 @@ export abstract class IndexerFactory<T> {
     this.concurrencyTimeout = config.concurrencyTimeout ?? (this.runningTimeout ? this.runningTimeout * 2 : 120)
     this.redisAdapter = config.redis
     this.indicator = config.initial
+    this.logger = new Logger(`IndexerFactory[${name}]`)
 
     // 如果提供了 Redis，创建锁实例
     if (this.redisAdapter) {
@@ -202,10 +205,10 @@ export abstract class IndexerFactory<T> {
       const exists = await this.redis.exists(`${concurrencyKey}:shadow:${startStr}`)
       if (exists)
         continue
-      console.warn(`Indexer "${this.name}" found zombie task: ${startStr}. Moving to failed queue.`)
+      this.logger.warn(`Found zombie task: ${startStr}. Moving to failed queue.`)
       await this.redis.pipeline()
         // 从运行队列移除
-        .lrem(concurrencyKey, 1, startStr)
+        .lrem(concurrencyKey, 5, startStr)
         // 塞入失败队列，等待下一次 consume 重新认领
         .rpush(`indexer:${this.name}:failed`, startStr)
         .exec()
@@ -307,6 +310,6 @@ export abstract class IndexerFactory<T> {
 
     // 批量删除 Redis Key
     await this.redis.del(...keys)
-    console.warn(`Indexer "${this.name}" state has been reset.`)
+    this.logger.warn('State has been reset.')
   }
 }
