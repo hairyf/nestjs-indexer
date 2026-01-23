@@ -418,7 +418,7 @@ describe('indexerFactory', () => {
         // 添加运行中的任务（使用 JSON.stringify 的结果，就像 occupy 方法一样）
         await redis.rpush(concurrencyKey, task1Str, task2Str)
         // 只创建 task1 的影子 key，task2 没有影子 key（僵尸任务）
-        // shadow key 使用从队列获取的字符串值（即 task1Str），因为 cleanup 检查时使用的是这个格式
+        // shadow key 使用序列化后的值，与队列中的值保持一致
         await redis.set(`${concurrencyKey}:shadow:${task1Str}`, '1', 'EX', 30)
 
         // 记录清理前的状态
@@ -428,20 +428,18 @@ describe('indexerFactory', () => {
 
         await indexer.cleanup()
 
-        // cleanup 从队列获取的是字符串（task2Str = "20"），然后再次 JSON.stringify
-        // 所以失败队列中的值是 JSON.stringify("20") = '"20"'
+        // cleanup 从队列获取的是字符串（task2Str = "20"），直接使用，不再序列化
         const failed = await redis.lrange('indexer:test-redis:failed', 0, -1)
-        const expectedFailed = JSON.stringify(task2Str) // 双重序列化
-        // 验证僵尸任务被添加到失败队列
+        // 验证僵尸任务被添加到失败队列（使用原始序列化值，不是双重序列化）
         expect(failed.length).toBeGreaterThan(0)
-        expect(failed).toContain(expectedFailed)
+        expect(failed).toContain(task2Str)
 
-        // 注意：由于 cleanup 方法的实现问题（对已字符串化的值再次 JSON.stringify），
-        // lrem 可能无法正确移除任务。这里我们至少验证了 cleanup 能够识别僵尸任务
-        // 并将其添加到失败队列
+        // 验证 cleanup 能正确移除僵尸任务
         const afterCleanup = await redis.lrange(concurrencyKey, 0, -1)
         // task1 应该仍在队列中（因为有 shadow key）
         expect(afterCleanup).toContain(task1Str)
+        // task2 应该被移除（因为它是僵尸任务）
+        expect(afterCleanup).not.toContain(task2Str)
       })
 
       it('should not cleanup when no Redis', async () => {

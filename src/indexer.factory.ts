@@ -162,11 +162,12 @@ export abstract class IndexerFactory<T> {
     if (!this.redis)
       return
     const key = `indexer:${this.name}:concurrency`
+    const startStr = JSON.stringify(start)
     await this.redis
       .pipeline()
-      .rpush(key, JSON.stringify(start))
-      // 影子 Key 的过期时间代表任务的“最长处理时间”
-      .set(`${key}:shadow:${start}`, '1', 'EX', String(this.runningTimeout))
+      .rpush(key, startStr)
+      // 影子 Key 的过期时间代表任务的"最长处理时间"
+      .set(`${key}:shadow:${startStr}`, '1', 'EX', String(this.runningTimeout))
       .expire(key, String(this.concurrencyTimeout))
       .exec()
   }
@@ -178,10 +179,11 @@ export abstract class IndexerFactory<T> {
     if (!this.redis)
       return
     const key = `indexer:${this.name}:concurrency`
+    const startStr = JSON.stringify(start)
     await this.redis
       .pipeline()
-      .lrem(key, 1, JSON.stringify(start))
-      .del(`${key}:shadow:${start}`)
+      .lrem(key, 1, startStr)
+      .del(`${key}:shadow:${startStr}`)
       .exec()
   }
 
@@ -193,15 +195,14 @@ export abstract class IndexerFactory<T> {
       return
     const concurrencyKey = `indexer:${this.name}:concurrency`
 
-    // 获取当前所有正在运行的任务
+    // 获取当前所有正在运行的任务（已经是序列化后的字符串）
     const runningTasks = await this.redis.lrange(concurrencyKey, 0, -1)
 
-    for (const start of runningTasks) {
-      const exists = await this.redis.exists(`${concurrencyKey}:shadow:${start}`)
+    for (const startStr of runningTasks) {
+      const exists = await this.redis.exists(`${concurrencyKey}:shadow:${startStr}`)
       if (exists)
         continue
-      console.warn(`Indexer "${this.name}" found zombie task: ${start}. Moving to failed queue.`)
-      const startStr = JSON.stringify(start)
+      console.warn(`Indexer "${this.name}" found zombie task: ${startStr}. Moving to failed queue.`)
       await this.redis.pipeline()
         // 从运行队列移除
         .lrem(concurrencyKey, 1, startStr)
