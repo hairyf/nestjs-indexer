@@ -62,7 +62,7 @@ IndexerModule.forRoot({
   indexers: [CounterIndexer],
   // Configure persistent storage (for storing index pointers)
   // If not provided, it defaults to memory storage (pointers lost on restart)
-  // storage: createStorage(...)
+  // storage: createStorage(...) or { getItem(key): index, setItem(key, index) }
 })
 ```
 
@@ -99,18 +99,19 @@ class AppService {
 
 Parallel execution across a multi-instance cluster. Handles atomic interval claiming and failed task retries automatically.
 
+> **Note**: The built-in queue implementation may not meet production-level requirements. For production use, recommend using [BullMQ](https://docs.bullmq.io/) or other mature queue systems. See the [Integration with BullMQ](#integration-with-bullmq) section below for best practices.
+
 ```ts
 // timer.indexer.ts
 import { Injectable } from '@nestjs/common'
-import { Indexer, IndexerFactory } from 'nestjs-indexer'
-import { IoredisAdapter } from 'nestjs-redlock-universal'
+import { Indexer, IndexerFactory, IoredisAdapter } from 'nestjs-indexer'
 
 @Injectable()
 @Indexer('timer', {
   initial: Date.now(),
-  concurrency: 50, // Global limit of 50 concurrent tasks
+  // Global limit of 50 concurrent tasks
+  concurrency: 50,
   redis: new IoredisAdapter(redisClient),
-  runningTimeout: 60, // Max task duration: 60s (otherwise considered a zombie)
 })
 export class TimerIndexer extends IndexerFactory<number> {
   async onHandleStep(current: number): Promise<number> {
@@ -139,9 +140,7 @@ class AppService {
   @Interval(100)
   async handleTimer() {
     // Automatically fetches start/ended, handles retries and concurrency slots
-    await this.timerIndexer.consume(async (start: number, ended: number) => {
-      await this.processData(start, ended)
-    })
+    await this.timerIndexer.consume(this.processData.bind(this))
   }
 }
 ```
@@ -149,6 +148,18 @@ class AppService {
 ### Integration with BullMQ
 
 Use the Indexer as an interval dispatcher combined with a queue for maximum reliability.
+
+```ts
+// You still need to pass in redis (for atomic retrieval of indices)
+@Indexer('timer', { redis: new IoredisAdapter(redisClient) })
+class TimerIndexer extends IndexerFactory<number> {
+  onHandleStep(current: number): Promise<number> {
+    // ...
+  }
+
+  // you not need to implement onHandleCleanup
+}
+```
 
 ```ts
 import { Queue } from 'bull'
@@ -162,12 +173,8 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    await this.timerIndexer.consume(
-      // Dispatch to queue; successful entry into queue is treated as successful consumption
-      async (start: number, ended: number) => this.queue.add('pull', { start, ended }),
-      // Disable internal Indexer retries, delegate to the queue instead
-      { retry: false }
-    )
+    const [start, ended] = await this.timerIndexer.acquire()
+    await this.queue.add('pull', { start, ended })
   }
 }
 
@@ -207,7 +214,7 @@ Classes extending `IndexerFactory<T>` should implement:
 ## API Methods
 
 * `consume(callback, options?)` - Core function integrating concurrency and retry logic.
-* `atomic()` - Atomically retrieves the next index interval.
+* `acquire()` - Atomically retrieves the next index interval.
 * `current()` - Retrieves the current index value.
 * `next(value?)` - Sets the next index value manually.
 * `latest()` - Checks if the latest benchmark is reached.

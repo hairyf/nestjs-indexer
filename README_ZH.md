@@ -99,6 +99,8 @@ class AppService {
 
 多实例集群并发执行。内部自动处理原子区间认领及失败任务重试。
 
+> **注意**：内置的队列实现可能无法满足生产级别的使用需求。对于生产环境，推荐使用 [BullMQ](https://docs.bullmq.io/) 或其他成熟的队列系统。请参考下方的 [与 BullMQ 集成](#integration-with-bullmq) 部分了解最佳实践。
+
 ```typescript
 // timer.indexer.ts
 import { Injectable } from '@nestjs/common'
