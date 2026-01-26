@@ -46,7 +46,14 @@ export class AppService {
   @Interval(100)
   // Distributed concurrency, through indexer.consume, it will automatically handle concurrency, failure retry, and atomic index movement
   async handleTimer() {
-    async function callback(start: number) {
+    const indexer = this.timerIndexer
+    async function callback(start: number, ended: number, epoch: number) {
+      // 可选：在 Worker 逻辑开始前验证 epoch
+      if (!(await indexer.validate(epoch))) {
+        console.log('Epoch mismatch, skipping task due to rollback')
+        return
+      }
+
       await delay(1000)
       if (Math.random() < 0.1)
         throw new Error('Random failure')

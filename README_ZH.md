@@ -150,10 +150,8 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    // 自动获取 start/ended，处理失败重试与并发占用
-    await this.timerIndexer.consume(async (start: number, ended: number) => {
-      await this.processData(start, ended)
-    })
+    // 自动获取 start/ended/epoch，处理失败重试与并发占用
+    await this.timerIndexer.consume(this.processData.bind(this))
   }
 }
 ```
@@ -176,7 +174,7 @@ class AppService {
   async handleTimer() {
     await this.timerIndexer.consume(
       // 派发至队列，成功入队即视为消费成功
-      async (start: number, ended: number) => this.queue.add('pull', { start, ended }),
+      async (start, ended, epoch) => this.queue.add('pull', { start, ended, epoch }),
       // 关闭 Indexer 内部重试，交给队列处理
       { retry: false }
     )
@@ -215,16 +213,80 @@ class IndexerProcessor {
 * `onHandleStep(current: T): Promise<T>` - **必需**，计算下一个索引值
 * `onHandleLatest(current: T): Promise<boolean> | boolean` - **可选**，检查是否已到达最新指标
 * `onHandleInitial(): Promise<T>` - **可选**，获取初始值（如果不提供，使用装饰器中的 `initial`）
+* `onHandleRollback(from: T, to: T): Promise<void>` - **可选**，处理回滚时的业务逻辑（如删除脏数据）
 
 ## API Methods
 
 * `consume(callback, options?)` - 核心消费函数，集成并发与重试逻辑
-* `atomic()` - 原子获取下一个索引区间
+* `atomic()` - 原子获取下一个索引区间，返回 `[start, ended, epoch]` 三元组
 * `current()` - 获取当前索引值
 * `next(value?)` - 设置下一个索引值
 * `latest()` - 检查是否已到达最新指标
 * `cleanup()` - 触发僵尸任务清理（需要配合定时任务执行）
+* `rollback(target)` - 回滚索引指针到指定位置（需要 Redis）
+* `validate(epoch)` - 验证 epoch 是否匹配当前版本（用于在 Worker 中检查回滚）
 * `reset()` - 重置所有 Redis 状态与游标指针(谨慎使用，会导致所有任务重新执行)
+
+## 回滚功能
+
+回滚功能允许您安全地将索引指针回退到之前的位置，适用于处理链分叉、数据修正或业务逻辑变更等场景。
+
+### 基本使用
+
+```ts
+// 回滚到指定位置
+await this.indexer.rollback(targetValue)
+```
+
+### 生命周期钩子
+
+实现 `onHandleRollback` 来处理回滚时的业务逻辑（如删除脏数据）：
+
+```ts
+@Indexer('timer', { redis: new IoredisAdapter(redisClient) })
+export class TimerIndexer extends IndexerFactory<number> {
+  async onHandleStep(current: number): Promise<number> {
+    return current + 60000
+  }
+
+  // 可选：处理回滚时的业务逻辑
+  async onHandleRollback(from: number, to: number): Promise<void> {
+    // 删除需要重新索引的数据范围 [to, from)
+    await this.deleteDataInRange(to, from)
+  }
+}
+```
+
+### Worker 中的 Epoch 验证
+
+使用 `consume()/atomic()` 时，callback 会接收到 `epoch` 参数。使用 `validate(epoch)` 在处理前检查是否发生了回滚：
+
+```ts
+await this.indexer.consume(async (start, ended, epoch) => {
+  // 你的任务逻辑
+  const items = await this.processData(start, ended)
+  // 在处理前验证 epoch
+  if (!(await this.indexer.validate(epoch))) {
+    console.log('检测到回滚，跳过任务')
+    return
+  }
+  await db.insert(items)
+})
+```
+
+### 工作原理
+
+1. **原子性回滚**：`rollback()` 使用 Redis 锁确保与 `atomic()` 操作的原子性。
+2. **Epoch 机制**：每次回滚会递增一个 epoch 计数器。在回滚前启动的任务将拥有与当前不同的 epoch。
+3. **自动清理**：回滚会自动清理 Redis 中的运行中任务、失败队列和并发槽位。
+4. **Epoch 验证**：Worker 可以使用 `validate(epoch)` 来检测回滚并跳过过时的任务。
+
+### 重要提示
+
+* 回滚功能需要 Redis（用于分布式协调）。
+* 回滚后，epoch 不匹配的任务会被自动丢弃。
+* 使用 `onHandleRollback` 来清理需要重新索引的数据。
+* 对于重索引场景，在业务逻辑中使用 upsert 操作，而非 insert。
 
 ## License
 

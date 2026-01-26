@@ -81,6 +81,16 @@ export abstract class IndexerFactory<T> {
   }
 
   /**
+   * 当触发回滚时调用
+   * 子类可以覆盖此方法以实现自定义回滚逻辑（如删除脏数据）
+   * @param _from 当前游标位置
+   * @param _to 目标回滚位置
+   */
+  async onHandleRollback(_from: T, _to: T): Promise<void> {
+    // 默认不进行任何操作，由业务层实现具体的删数逻辑
+  }
+
+  /**
    * 获取当前索引值
    */
   async current(): Promise<T> {
@@ -132,15 +142,47 @@ export abstract class IndexerFactory<T> {
   }
 
   /**
+   * 获取当前 epoch 版本号
+   */
+  private async epoch(): Promise<number> {
+    if (!this.redis)
+      return 0
+    const epoch = await this.redis.get(`indexer:${this.name}:epoch`)
+    return epoch ? Number.parseInt(epoch, 10) : 0
+  }
+
+  /**
+   * 递增 epoch 版本号
+   */
+  private async incrementEpoch(): Promise<number> {
+    if (!this.redis)
+      return 0
+    return this.redis.incr(`indexer:${this.name}:epoch`)
+  }
+
+  /**
+   * 验证 epoch 是否匹配当前版本号
+   * 方便用户在 Worker 逻辑开始前进行简单的 if 判断
+   * @param epoch 要验证的 epoch 版本号
+   * @returns 如果 epoch 匹配返回 true，否则返回 false
+   */
+  async validate(epoch: number): Promise<boolean> {
+    const currentEpoch = await this.epoch()
+    return currentEpoch === epoch
+  }
+
+  /**
    * 原子性获取 start 和 end 值，并预占 current
    * 内部使用 redis 锁确保原子性
+   * @returns [start, ended, epoch] 三元组
    */
-  async atomic(): Promise<[T, T]> {
+  async atomic(): Promise<[T, T, number]> {
     if (!this.currentLock)
       throw new Error('Failed to get current lock')
 
     let start: T | undefined
     let ended: T | undefined
+    let epoch: number | undefined
 
     await this.currentLock.using(async () => {
       start = await this.current()
@@ -150,12 +192,14 @@ export abstract class IndexerFactory<T> {
       ended = await this.step(start)
       // 立即预占，这样下一个实例就能获取到下一个不同的 start 值，实现真正的并发
       await this.next(ended)
+      // 获取当前 epoch
+      epoch = await this.epoch()
     })
 
-    if (start === undefined || ended === undefined)
-      throw new Error('Failed to get start and ended')
+    if (start === undefined || ended === undefined || epoch === undefined)
+      throw new Error('Failed to get start, ended and epoch')
 
-    return [start, ended]
+    return [start, ended, epoch]
   }
 
   /**
@@ -244,11 +288,43 @@ export abstract class IndexerFactory<T> {
   }
 
   /**
+   * 清理 Redis 中的运行中任务状态
+   * 包括并发队列、影子 Key 和失败队列
+   */
+  private async clearRunningTasks(): Promise<void> {
+    if (!this.redis)
+      return
+
+    const concurrencyKey = `indexer:${this.name}:concurrency`
+    const failedKey = `indexer:${this.name}:failed`
+
+    // 获取所有正在运行的任务
+    const runningTasks = await this.redis.lrange(concurrencyKey, 0, -1)
+
+    // 构建管道操作
+    const pipeline = this.redis.pipeline()
+
+    // 删除并发队列
+    if (runningTasks.length > 0)
+      pipeline.del(concurrencyKey)
+
+    // 删除所有影子 Key
+    for (const startStr of runningTasks) {
+      pipeline.del(`${concurrencyKey}:shadow:${startStr}`)
+    }
+
+    // 删除失败队列
+    pipeline.del(failedKey)
+
+    await pipeline.exec()
+  }
+
+  /**
    * 使用原子性操作执行任务
    * 自动获取锁、并发控制、失败重试、原子指标移动
    */
   async consume(
-    callback: (start: T, ended: T) => Promise<void>,
+    callback: (start: T, ended: T, epoch: number) => Promise<void>,
     options: { retry?: boolean } = {},
   ): Promise<void> {
     const { retry = true } = options
@@ -265,23 +341,33 @@ export abstract class IndexerFactory<T> {
     const failed = await this.failed()
     let start: T
     let ended: T
+    let epoch: number
 
     if (failed) {
       start = failed
       ended = await this.step(failed)
+      // 获取失败任务时的 epoch（简化处理，使用当前 epoch）
+      epoch = await this.epoch()
     }
     else {
       if (await this.latest())
         return
-      [start, ended] = await this.atomic()
+      [start, ended, epoch] = await this.atomic()
     }
 
     await this.occupy(start)
 
     try {
-      await callback(start, ended)
+      await callback(start, ended, epoch)
     }
     catch (error) {
+      // 检查 epoch 是否匹配，如果不匹配说明发生了回滚，不需要重试
+      if (!await this.validate(epoch)) {
+        this.logger.warn(
+          `[Indexer:${this.name}] Task [${JSON.stringify(start)}, ${JSON.stringify(ended)}] failed but epoch mismatch (task epoch: ${epoch}, current epoch: ${await this.epoch()}). Skipping retry due to rollback.`,
+        )
+        throw error
+      }
       if (retry)
         await this.fail(start)
       throw error
@@ -289,6 +375,33 @@ export abstract class IndexerFactory<T> {
     finally {
       await this.release(start)
     }
+  }
+
+  /**
+   * 回滚索引指针到指定位置
+   * @param target 目标回滚位置
+   */
+  async rollback(target: T): Promise<void> {
+    if (!this.currentLock)
+      throw new Error('Indexer requires redis and lock to use "rollback" method')
+
+    await this.currentLock.using(async () => {
+      const current = await this.current()
+
+      // 1. 调用业务回调
+      await this.onHandleRollback(current, target)
+
+      // 2. 更新持久化存储的指针
+      await this.next(target)
+
+      // 3. 清理 Redis 中的运行中任务状态
+      await this.clearRunningTasks()
+
+      // 4. 递增 epoch 版本号，通知其他实例发生了回滚
+      await this.incrementEpoch()
+
+      this.logger.log(`[Indexer:${this.name}] Rollback from ${current} to ${target}`)
+    })
   }
 
   /**
@@ -303,6 +416,7 @@ export abstract class IndexerFactory<T> {
       `indexer:${this.name}:current`, // 锁 Key
       `indexer:${this.name}:concurrency`, // 并发队列
       `indexer:${this.name}:failed`, // 失败重试队列
+      `indexer:${this.name}:epoch`, // 版本号
     ]
 
     // 也可以连同 storage 里的 current 值一起清空

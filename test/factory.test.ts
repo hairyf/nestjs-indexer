@@ -332,12 +332,13 @@ describe('indexerFactory', () => {
         await expect(noLockIndexer.atomic()).rejects.toThrow('Failed to get current lock')
       })
 
-      it('should return [start, ended] values atomically', async () => {
+      it('should return [start, ended, epoch] values atomically', async () => {
         await storage.setItem('indexer:test-redis', 10)
-        const [start, ended] = await indexer.atomic()
+        const [start, ended, epoch] = await indexer.atomic()
 
         expect(start).toBe(10)
         expect(ended).toBe(11)
+        expect(typeof epoch).toBe('number')
         // 验证值已被预占
         const current = await indexer.current()
         expect(current).toBe(11)
@@ -540,14 +541,15 @@ describe('indexerFactory', () => {
         ).rejects.toThrow('Indexer requires redis to use "consume" method')
       })
 
-      it('should execute callback with start and ended values', async () => {
+      it('should execute callback with start, ended and epoch values', async () => {
         // 清理状态并设置初始值
         await storage.removeItem('indexer:test-redis')
         await redis.del('indexer:test-redis:concurrency', 'indexer:test-redis:failed')
         await storage.setItem('indexer:test-redis', 5)
-        const callback = vi.fn(async (start: number, ended: number) => {
+        const callback = vi.fn(async (start: number, ended: number, epoch: number) => {
           expect(start).toBe(5)
           expect(ended).toBe(6)
+          expect(typeof epoch).toBe('number')
         })
 
         await indexer.consume(callback)
@@ -571,7 +573,7 @@ describe('indexerFactory', () => {
         await redis.del('indexer:test-redis:concurrency', 'indexer:test-redis:failed')
         await redis.rpush('indexer:test-redis:failed', JSON.stringify(100))
 
-        const callback = vi.fn(async (start: number) => {
+        const callback = vi.fn(async (start: number, _ended: number, _epoch: number) => {
           expect(start).toBe(100)
         })
 

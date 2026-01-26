@@ -139,7 +139,7 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    // Automatically fetches start/ended, handles retries and concurrency slots
+    // Automatically fetches start/ended/epoch, handles retries and concurrency slots
     await this.timerIndexer.consume(this.processData.bind(this))
   }
 }
@@ -173,8 +173,8 @@ class AppService {
 
   @Interval(100)
   async handleTimer() {
-    const [start, ended] = await this.timerIndexer.acquire()
-    await this.queue.add('pull', { start, ended })
+    const [start, ended, epoch] = await this.timerIndexer.atomic()
+    await this.queue.add('pull', { start, ended, epoch })
   }
 }
 
@@ -182,8 +182,12 @@ class AppService {
 class IndexerProcessor {
   @Process('pull')
   async handlePull(job: Job) {
-    const { start, ended } = job.data
+    const { start, ended, epoch } = job.data
     // Business logic here
+    if (!(await this.timerIndexer.validate(epoch))) {
+      // Skip if rollback occurred
+    }
+    // save data
   }
 }
 ```
@@ -210,16 +214,82 @@ Classes extending `IndexerFactory<T>` should implement:
 * `onHandleStep(current: T): Promise<T>` - **Required**: Calculates the next index value.
 * `onHandleLatest(current: T): Promise<boolean> | boolean` - **Optional**: Checks if the latest benchmark is reached.
 * `onHandleInitial(): Promise<T>` - **Optional**: Gets the initial value (overrides decorator `initial`).
+* `onHandleRollback(from: T, to: T): Promise<void>` - **Optional**: Handles business logic during rollback (e.g., deleting dirty data).
 
 ## API Methods
 
 * `consume(callback, options?)` - Core function integrating concurrency and retry logic.
-* `acquire()` - Atomically retrieves the next index interval.
+* `atomic()` - Atomically retrieves the next index interval `[start, ended, epoch]`.
 * `current()` - Retrieves the current index value.
 * `next(value?)` - Sets the next index value manually.
 * `latest()` - Checks if the latest benchmark is reached.
 * `cleanup()` - Triggers zombie task cleanup (should be used with a cron/interval).
+* `rollback(target)` - Rolls back the index pointer to a target position (requires Redis).
+* `validate(epoch)` - Validates if the epoch matches the current version (useful for checking rollback in workers).
 * `reset()` - Resets all Redis states and cursor pointers (**Use with caution**: causes all tasks to re-execute).
+
+## Rollback Feature
+
+The rollback feature allows you to safely roll back the index pointer to a previous position, useful for handling chain forks, data corrections, or business logic changes.
+
+### Basic Usage
+
+```ts
+// Roll back to a specific position
+await this.indexer.rollback(targetValue)
+```
+
+### Lifecycle Hook
+
+Implement `onHandleRollback` to handle business logic during rollback (e.g., deleting dirty data):
+
+```ts
+@Indexer('timer', { redis: new IoredisAdapter(redisClient) })
+export class TimerIndexer extends IndexerFactory<number> {
+  async onHandleStep(current: number): Promise<number> {
+    return current + 60000
+  }
+
+  // Optional: Handle rollback business logic
+  async onHandleRollback(from: number, to: number): Promise<void> {
+    // Delete data in the range [to, from) that needs to be re-indexed
+    await this.deleteDataInRange(to, from)
+  }
+}
+```
+
+### Epoch Validation in Workers
+
+When using `consume()`, the callback receives an `epoch` parameter. Use `validate(epoch)` to check if a rollback occurred before processing:
+
+```ts
+await this.indexer.consume(async (start, ended, epoch) => {
+  // Your business logic here
+  const items = await this.processData(start, ended)
+
+  // Validate epoch before processing
+  if (!(await this.indexer.validate(epoch))) {
+    console.log('Rollback detected, skipping task')
+    return
+  }
+
+  await db.insert(items)
+})
+```
+
+### How It Works
+
+1. **Atomic Rollback**: `rollback()` uses Redis locks to ensure atomicity with `atomic()` operations.
+2. **Epoch Mechanism**: Each rollback increments an epoch counter. Tasks started before a rollback will have a different epoch than the current one.
+3. **Automatic Cleanup**: Rollback automatically cleans up running tasks, failed queues, and concurrency slots in Redis.
+4. **Epoch Validation**: Workers can use `validate(epoch)` to detect rollbacks and skip processing outdated tasks.
+
+### Important Notes
+
+* Rollback requires Redis (for distributed coordination).
+* After rollback, tasks with mismatched epochs will be automatically discarded.
+* Use `onHandleRollback` to clean up data that needs to be re-indexed.
+* For reindex scenarios, use upsert operations in your business logic, not insert.
 
 ## License
 
