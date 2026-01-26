@@ -122,7 +122,7 @@ export class TimerIndexer extends IndexerFactory<number> {
   @Interval(1000 * 60 * 15)
   // 如果是分布式模式，需要定期清理僵尸任务
   // 默认情况下，fail 会自动重试，如果重试超时了，
-  // 就会占用并发信号量，时间长了，就会导致无法继续执行任务
+  // 就会占用并发信号量，时间久了，就會变成僵尸任务
   async onHandleCleanup(): Promise<void> {
     await this.cleanup()
   }
