@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { createStorage } from 'unstorage'
 import { describe, expect, it } from 'vitest'
+import { INDEXER_NAME_KEY } from '../src/constants'
 import { Indexer, IndexerFactory, IndexerModule } from '../src/index'
 import 'reflect-metadata'
 
@@ -136,6 +137,31 @@ describe('indexerModule', () => {
 
     // 验证可以从模块中获取
     const indexer = module.get(TestModuleIndexer)
+    expect(indexer).toBeDefined()
+  })
+
+  it('should handle indexer with undefined config metadata', async () => {
+    // 创建一个有 name 但没有 config 的类（模拟 Reflect.getMetadata 返回 undefined）
+    class UndecoratedConfigIndexer extends IndexerFactory<number> {
+      async onHandleStep(current: number): Promise<number> {
+        return current + 1
+      }
+    }
+
+    // 手动设置 name 元数据，但不设置 config 元数据（模拟 config 为 undefined）
+    Reflect.defineMetadata(INDEXER_NAME_KEY, 'test-undecorated-config', UndecoratedConfigIndexer)
+    // 不设置 INDEXER_CONFIG_KEY，这样 Reflect.getMetadata 会返回 undefined，触发 || {} 分支
+
+    const module = await Test.createTestingModule({
+      imports: [
+        IndexerModule.forRoot({
+          indexers: [UndecoratedConfigIndexer as any],
+        }),
+      ],
+    }).compile()
+
+    // 即使没有 config 元数据，也应该能创建实例（使用空对象 {}）
+    const indexer = module.get(UndecoratedConfigIndexer as any)
     expect(indexer).toBeDefined()
   })
 })
