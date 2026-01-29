@@ -10,5 +10,8 @@ export default antfu(
       'ts/consistent-type-imports': 'off',
       'pnpm/yaml-no-unused-catalog-item': 'off',
     },
+    ignores: [
+      '**/skills/**',
+    ],
   },
 )
