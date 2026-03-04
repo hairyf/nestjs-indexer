@@ -16,5 +16,6 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["playground", "dist", "node_modules"]
 }
